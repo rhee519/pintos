@@ -18,9 +18,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-// debug
-#include "../lib/stdio.h"
-
 static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
 
@@ -62,7 +59,6 @@ start_process(void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load(file_name, &if_.eip, &if_.esp);
-  hex_dump((uintptr_t)if_.esp , if_.esp , PHYS_BASE - if_.esp ,true) ;
 
   /* If load failed, quit. */
   palloc_free_page(file_name);
@@ -93,6 +89,9 @@ start_process(void *file_name_)
    does nothing. */
 int process_wait(tid_t child_tid UNUSED)
 {
+  //  TODO child_thread 실행 종료될 때까지 기다리기 위해 임시로 infinite loop 코드 삽입하였음.
+  while (true)
+    ;
   return -1;
 }
 
@@ -204,6 +203,53 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
                          uint32_t read_bytes, uint32_t zero_bytes,
                          bool writable);
 
+/* [PROJECT-1] Argument Passing */
+static void construct_stack(int argc, char **argv, void **esp);
+
+static void construct_stack(int argc, char **argv, void **esp)
+{
+  /* argv[argc-1], ... , argv[0] */
+  void *ptr_argv = *esp;
+  int bytes = 0;
+  for (int i = argc - 1; i >= 0; i--)
+  {
+    int len = strlen(argv[i]) + 1;
+    bytes += len;
+    *esp -= len;
+    strlcpy(*esp, argv[i], len);
+  }
+
+  /* word-align */
+  int word_align_len = (4 - bytes % 4) % 4;
+  *esp -= word_align_len;
+  memset(*esp, 0, word_align_len);
+
+  /* NULL pointer sentinel */
+  *esp -= 4;
+  **(uint32_t **)esp = 0;
+
+  /* Address' of argv[argc-1], ... , argv[0] to stack. */
+  for (int i = argc - 1; i >= 0; i--)
+  {
+    int len = strlen(argv[i]) + 1;
+    ptr_argv -= len;
+    *esp -= 4;
+    **(uint32_t **)esp = (uint32_t)ptr_argv;
+  }
+
+  /* Address of argv */
+  *esp -= 4;
+  **(uint32_t **)esp = (uint32_t)*esp + 4;
+
+  /* argc */
+  *esp -= 4;
+  **(uint32_t **)esp = argc;
+
+  /* return address */
+  *esp -= 4;
+  **(uint32_t **)esp = 0;
+}
+
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
@@ -223,29 +269,41 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
     goto done;
   process_activate();
 
-  // TODO parse file name
-  // int argc = 0;
-  // char **argv = (char **)malloc(sizeof(char *) * 5); // TODO filename 포함 인자 최대 5개만 가능하게 설정된 상태
-  // char buf[10];
-  // while (sscanf(file_name, "%s", buf))
+  /**
+   * [PROJECT-1] Parse file name from file_name.
+   */
+  /* Argument Parsing */
+  int argc = 0;
+  char *argv[128], file_name_copy[128], *ptr, *ptr_next;
+  char delimiter[] = " \t\r\n\v\f"; // POSIX whitespace characters
+  strlcpy(file_name_copy, file_name, 128);
+  ptr = strtok_r(file_name_copy, delimiter, &ptr_next);
+  while (ptr)
+  {
+    argv[argc++] = ptr;
+    ptr = strtok_r(NULL, delimiter, &ptr_next);
+  }
+  // printf("argc: %d\n", argc);
+  // for (int i = 0; i < argc; i++)
   // {
-  //   argv[argc] = (char *)malloc(strlen(buf));
-  //   strlcpy(argv[argc], buf);
-  //   argc++;
+  //   printf("argv[%d]: %s\n", i, argv[i]);
   // }
 
   /* Open executable file. */
-  file = filesys_open(file_name);
+  // file = filesys_open(file_name);
+  file = filesys_open(argv[0]);
   if (file == NULL)
   {
-    printf("load: %s: open failed\n", file_name);
+    // printf("load: %s: open failed\n", file_name);
+    printf("load: %s: open failed\n", argv[0]);
     goto done;
   }
 
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 || ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Elf32_Phdr) || ehdr.e_phnum > 1024)
   {
-    printf("load: %s: error loading executable\n", file_name);
+    // printf("load: %s: error loading executable\n", file_name);
+    printf("load: %s: error loading executable\n", argv[0]);
     goto done;
   }
 
@@ -311,10 +369,12 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   if (!setup_stack(esp))
     goto done;
 
-  // TODO Argument passing 구현
-
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
+
+  /* [PROJECT-1] Construct stack */
+  construct_stack(argc, argv, esp);
+  hex_dump((uintptr_t)*esp, *esp, PHYS_BASE - *esp, true);
 
   success = true;
 
