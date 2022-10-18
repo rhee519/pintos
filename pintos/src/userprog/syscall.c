@@ -20,9 +20,13 @@ static int syscall_wait(pid_t pid);
 static int syscall_read(int fd, void *buffer, unsigned size);
 static int syscall_write(int fd, const void *buffer, unsigned size);
 
-#define syscall_return(EAX_PTR, VALUE) ({ *EAX_PTR = (int)(VALUE); })
+/* argc of each syscall functions */
+static int syscall_argc[SYS_MAX] = {
+    0,
+};
 
-static inline void check_user_addr(const void *vaddr)
+static inline void
+check_user_addr(const void *vaddr)
 {
   if (!vaddr || !is_user_vaddr(vaddr) || is_kernel_vaddr(vaddr))
     syscall_exit(-1);
@@ -31,6 +35,30 @@ static inline void check_user_addr(const void *vaddr)
 void syscall_init(void)
 {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
+
+  /* [PROJECT-1] Initialize argc of each syscall function. */
+  syscall_argc[SYS_HALT] = 0;
+  syscall_argc[SYS_EXIT] = 1;
+  syscall_argc[SYS_EXEC] = 1;
+  syscall_argc[SYS_WAIT] = 1;
+  syscall_argc[SYS_CREATE] = 2;
+  syscall_argc[SYS_REMOVE] = 1;
+  syscall_argc[SYS_OPEN] = 1;
+  syscall_argc[SYS_FILESIZE] = 1;
+  syscall_argc[SYS_READ] = 3;
+  syscall_argc[SYS_WRITE] = 3;
+  syscall_argc[SYS_SEEK] = 2;
+  syscall_argc[SYS_TELL] = 1;
+  syscall_argc[SYS_CLOSE] = 1;
+
+  syscall_argc[SYS_MMAP] = 2;
+  syscall_argc[SYS_MUNMAP] = 1;
+
+  syscall_argc[SYS_CHDIR] = 1;
+  syscall_argc[SYS_MKDIR] = 1;
+  syscall_argc[SYS_READDIR] = 2;
+  syscall_argc[SYS_ISDIR] = 1;
+  syscall_argc[SYS_INUMBER] = 1;
 }
 
 static void
@@ -45,6 +73,12 @@ syscall_handler(struct intr_frame *f UNUSED)
   pid_t pid = 0;
 
   syscall_num = *(uint32_t *)f->esp;
+  if (syscall_num < 0 || syscall_num >= SYS_MAX)
+    syscall_exit(-1);
+
+  /* Check if address of each argument is valid. */
+  for (int i = 1; i <= syscall_argc[syscall_num]; i++)
+    check_user_addr(f->esp + 4 * i);
 
   int status = -1;
   switch (syscall_num)
