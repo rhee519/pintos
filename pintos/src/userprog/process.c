@@ -18,6 +18,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+static const char delimiter[] = " \t\r\n\v\f"; // POSIX whitespace characters
+
 static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
 
@@ -38,7 +40,11 @@ tid_t process_execute(const char *file_name)
   strlcpy(fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
+  /* [PROJECT-1] Parse process(thread) name from file_name. */
+  char file_name_copy[128], *thread_name, *save_ptr;
+  strlcpy(file_name_copy, file_name, 128);
+  thread_name = strtok_r(file_name_copy, delimiter, &save_ptr);
+  tid = thread_create(thread_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
   return tid;
@@ -89,10 +95,12 @@ start_process(void *file_name_)
    does nothing. */
 int process_wait(tid_t child_tid UNUSED)
 {
-  //  TODO child_thread 실행 종료될 때까지 기다리기 위해 임시로 infinite loop 코드 삽입하였음.
-  while (true)
+  struct thread *cur = thread_current();
+  int status = -1;
+
+  for (int i = 0; i < 1000000000; i++)
     ;
-  return -1;
+  return status;
 }
 
 /* Free the current process's resources. */
@@ -116,6 +124,8 @@ void process_exit(void)
     cur->pagedir = NULL;
     pagedir_activate(NULL);
     pagedir_destroy(pd);
+    // printf("\n\nthread name: %s\n", cur->name);
+    // printf("\n\nthread status: %d\n", cur->status);
   }
 }
 
@@ -248,6 +258,8 @@ static void construct_stack(int argc, char **argv, void **esp)
   /* return address */
   *esp -= 4;
   **(uint32_t **)esp = 0;
+
+  // hex_dump((uintptr_t)*esp, *esp, PHYS_BASE - *esp, true);
 }
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
@@ -275,7 +287,6 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   /* Argument Parsing */
   int argc = 0;
   char *argv[128], file_name_copy[128], *ptr, *ptr_next;
-  char delimiter[] = " \t\r\n\v\f"; // POSIX whitespace characters
   strlcpy(file_name_copy, file_name, 128);
   ptr = strtok_r(file_name_copy, delimiter, &ptr_next);
   while (ptr)
@@ -374,7 +385,15 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
 
   /* [PROJECT-1] Construct stack */
   construct_stack(argc, argv, esp);
-  hex_dump((uintptr_t)*esp, *esp, PHYS_BASE - *esp, true);
+  // hex_dump((uintptr_t)*esp, *esp, PHYS_BASE - *esp, true);
+
+  // printf("\n\nfrom load()\n");
+  // printf("addr of return value: %p\n", *esp);
+  // printf("rv: %d\n", *(int *)(*esp));
+  // printf("addr of argc: %p\n", *esp + 4);
+  // printf("argc: %d\n", *(int *)(*esp + 4));
+  // printf("addr of argv: %p\n", esp + 8);
+  // printf("argv: %d\n", *(int *)(*esp + 8));
 
   success = true;
 
