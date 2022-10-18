@@ -9,7 +9,8 @@
 #include "user/syscall.h"     /* System call numbers. */
 #include "devices/shutdown.h" /* shutdown_power_off() */
 #include "threads/vaddr.h"    /* check vaddr validity */
-#include <console.h>          /* STDIN, STDOUT */
+#include <console.h>          /* putbuf() */
+#include "devices/input.h"    /* input_getc() */
 
 static void syscall_handler(struct intr_frame *);
 
@@ -112,7 +113,10 @@ syscall_handler(struct intr_frame *f UNUSED)
     // TODO
     break;
   case SYS_READ: /* [PROJECT1] Read from a file. */
-    // TODO
+    f->eax = syscall_read(
+        (int)*(uint32_t *)(f->esp + 4),
+        *(uint32_t *)(f->esp + 8),
+        (unsigned)*(uint32_t *)(f->esp + 12));
     break;
   case SYS_WRITE: /* [PROJECT1] Write to a file. */
     // hex_dump((uintptr_t)f->esp, f->esp, PHYS_BASE - f->esp, true);
@@ -188,16 +192,29 @@ static int syscall_wait(pid_t pid)
 
 static int syscall_read(int fd, void *buffer, unsigned size)
 {
+  int bytes_read = 0;
+  if (fd == 0) /* STDIN */
+  {
+    for (bytes_read = 0; bytes_read < (int)size; bytes_read++)
+    {
+      uint8_t input = input_getc();
+      *(uint8_t *)(buffer + bytes_read) = input;
+    }
+  }
+
+  /* TODO implementation for other input stream */
+  return bytes_read;
 }
 
 static int syscall_write(int fd, const void *buffer, unsigned size)
 {
+  int bytes_written = 0;
   if (fd == 1) /* STDOUT */
   {
     putbuf(buffer, size);
-    return size;
+    bytes_written = size;
   }
 
-  // TODO
-  return -1;
+  /* TODO implementation for other output stream */
+  return bytes_written;
 }
