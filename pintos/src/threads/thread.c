@@ -196,12 +196,6 @@ tid_t thread_create(const char *name, int priority,
   /* Add to run queue. */
   thread_unblock(t);
 
-  /**
-   * [PROJECT-1]
-   */
-  /* yield CPU resource to thread */
-  thread_yield();
-
   return tid;
 }
 
