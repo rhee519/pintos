@@ -181,7 +181,8 @@ static void syscall_halt(void)
 static void syscall_exit(int status)
 {
   struct thread *cur = thread_current();
-  printf("%s: exit(%d)\n", cur->name, status);
+  cur->exit_status = status;
+  printf("%s: exit(%d)\n", cur->name, cur->exit_status);
   thread_exit();
 }
 

@@ -41,7 +41,10 @@ tid_t process_execute(const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   /* [PROJECT-1] Parse process(thread) name from file_name. */
-  char file_name_copy[128], *thread_name, *save_ptr;
+  char file_name_copy[128] = {
+      0,
+  },
+       *thread_name, *save_ptr;
   strlcpy(file_name_copy, file_name, 128);
   thread_name = strtok_r(file_name_copy, delimiter, &save_ptr);
   tid = thread_create(thread_name, PRI_DEFAULT, start_process, fn_copy);
@@ -69,7 +72,10 @@ start_process(void *file_name_)
   /* If load failed, quit. */
   palloc_free_page(file_name);
   if (!success)
+  {
+    thread_current()->exit_status = -1;
     thread_exit();
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -93,14 +99,26 @@ start_process(void *file_name_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(tid_t child_tid UNUSED)
+int process_wait(tid_t child_tid)
 {
-  struct thread *cur = thread_current();
-  int status = -1;
+  struct list_elem *e;
+  struct thread *t = NULL;
+  int exit_status;
 
-  for (int i = 0; i < 1000000000; i++)
-    ;
-  return status;
+  for (e = list_begin(&(thread_current()->child)); e != list_end(&(thread_current()->child)); e = list_next(e))
+  {
+    t = list_entry(e, struct thread, child_elem);
+    if (child_tid == t->tid)
+    {
+      sema_down(&t->child_wait);
+      exit_status = t->exit_status;
+      list_remove(&t->child_elem);
+      sema_up(&t->child_exit);
+      return exit_status;
+    }
+  }
+
+  return -1;
 }
 
 /* Free the current process's resources. */
@@ -124,9 +142,10 @@ void process_exit(void)
     cur->pagedir = NULL;
     pagedir_activate(NULL);
     pagedir_destroy(pd);
-    // printf("\n\nthread name: %s\n", cur->name);
-    // printf("\n\nthread status: %d\n", cur->status);
   }
+
+  sema_up(&cur->child_wait);
+  sema_down(&cur->child_exit);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -294,11 +313,6 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
     argv[argc++] = ptr;
     ptr = strtok_r(NULL, delimiter, &ptr_next);
   }
-  // printf("argc: %d\n", argc);
-  // for (int i = 0; i < argc; i++)
-  // {
-  //   printf("argv[%d]: %s\n", i, argv[i]);
-  // }
 
   /* Open executable file. */
   // file = filesys_open(file_name);
