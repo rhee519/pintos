@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 
 /* [PROJECT1] */
+#include "userprog/process.h"
 #include <debug.h>            /* ASSERT(), NOT_REACHED() */
 #include "user/syscall.h"     /* System call numbers. */
 #include "devices/shutdown.h" /* shutdown_power_off() */
@@ -29,6 +30,7 @@ static int syscall_argc[SYS_MAX] = {
 static inline void
 check_user_addr(const void *vaddr)
 {
+  // printf("check %p\n", vaddr);
   if (!vaddr || !is_user_vaddr(vaddr) || is_kernel_vaddr(vaddr))
     syscall_exit(-1);
 }
@@ -65,23 +67,29 @@ void syscall_init(void)
 static void
 syscall_handler(struct intr_frame *f UNUSED)
 {
-  /**
-   * TODO syscall 별로 argument 개수에 따라 address validity 체크해야 함!
-   * ex. syscall_write(): arg 3개 ---> f->esp + 4, 8, 12 check!
-   */
-  check_user_addr(f->esp); /* syscall_num */
   int syscall_num = 0;
-  pid_t pid = 0;
 
-  syscall_num = *(uint32_t *)f->esp;
+  /**
+   * [PROJECT-1] Jiho Rhee
+   * esp: 4-byte stack pointer.
+   * We can read syscall_num & arguments by referencing esp.
+   *
+   * ex.
+   * esp[0] == *(esp) == syscall_num
+   * esp[1] == *(esp+1) == *(uint32_t *)(f->esp+4) == arg[0]
+   * ...
+   */
+  uint32_t *esp = f->esp;
+  check_user_addr(esp); /* syscall_num */
+
+  syscall_num = *esp;
   if (syscall_num < 0 || syscall_num >= SYS_MAX)
     syscall_exit(-1);
 
   /* Check if address of each argument is valid. */
   for (int i = 1; i <= syscall_argc[syscall_num]; i++)
-    check_user_addr(f->esp + 4 * i);
+    check_user_addr(&esp[i]);
 
-  int status = -1;
   switch (syscall_num)
   {
   /* Projects 2 and later. */
@@ -89,15 +97,13 @@ syscall_handler(struct intr_frame *f UNUSED)
     syscall_halt();
     break;
   case SYS_EXIT: /* [PROJECT1] Terminate this process. */
-    // hex_dump((uintptr_t)(f->esp), f->esp, PHYS_BASE - f->esp, true);
-    status = (int)*(uint32_t *)(f->esp + 4);
-    syscall_exit(status);
+    syscall_exit((int)esp[1]);
     break;
   case SYS_EXEC: /* [PROJECT1] Start another process. */
-    // TODO
+    f->eax = (uint32_t)syscall_exec((const char *)esp[1]);
     break;
   case SYS_WAIT: /* [PROJECT1] Wait for a child process to die. */
-    // TODO
+    f->eax = syscall_wait((pid_t)esp[1]);
     break;
 
   case SYS_CREATE: /* Create a file. */
@@ -114,16 +120,15 @@ syscall_handler(struct intr_frame *f UNUSED)
     break;
   case SYS_READ: /* [PROJECT1] Read from a file. */
     f->eax = syscall_read(
-        (int)*(uint32_t *)(f->esp + 4),
-        *(uint32_t *)(f->esp + 8),
-        (unsigned)*(uint32_t *)(f->esp + 12));
+        (int)esp[1],
+        (void *)esp[2],
+        (unsigned)esp[3]);
     break;
   case SYS_WRITE: /* [PROJECT1] Write to a file. */
-    // hex_dump((uintptr_t)f->esp, f->esp, PHYS_BASE - f->esp, true);
     f->eax = syscall_write(
-        (int)*(uint32_t *)(f->esp + 4),
-        *(uint32_t *)(f->esp + 8),
-        (unsigned)*(uint32_t *)(f->esp + 12));
+        (int)esp[1],
+        (void *)esp[2],
+        (unsigned)esp[3]);
     break;
   case SYS_SEEK: /* Change position in a file. */
     // TODO
@@ -163,8 +168,6 @@ syscall_handler(struct intr_frame *f UNUSED)
     NOT_REACHED();
     break;
   }
-
-  // thread_exit();
 }
 
 /**
@@ -184,10 +187,12 @@ static void syscall_exit(int status)
 
 static pid_t syscall_exec(const char *file)
 {
+  return (pid_t)process_execute(file);
 }
 
 static int syscall_wait(pid_t pid)
 {
+  return process_wait((tid_t)pid);
 }
 
 static int syscall_read(int fd, void *buffer, unsigned size)
