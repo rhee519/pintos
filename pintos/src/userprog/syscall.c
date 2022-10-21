@@ -7,20 +7,13 @@
 /* [PROJECT1] */
 #include "userprog/process.h"
 #include <debug.h>            /* ASSERT(), NOT_REACHED() */
-#include "user/syscall.h"     /* System call numbers. */
 #include "devices/shutdown.h" /* shutdown_power_off() */
 #include "threads/vaddr.h"    /* check vaddr validity */
 #include <console.h>          /* putbuf() */
 #include "devices/input.h"    /* input_getc() */
+#include <string.h>
 
 static void syscall_handler(struct intr_frame *);
-
-static void syscall_halt(void);
-static void syscall_exit(int status);
-static pid_t syscall_exec(const char *file);
-static int syscall_wait(pid_t pid);
-static int syscall_read(int fd, void *buffer, unsigned size);
-static int syscall_write(int fd, const void *buffer, unsigned size);
 
 /* argc of each syscall functions */
 static int syscall_argc[SYS_MAX] = {
@@ -173,12 +166,12 @@ syscall_handler(struct intr_frame *f UNUSED)
 /**
  * [PROJECT-1] syscall implementation.
  */
-static void syscall_halt(void)
+void syscall_halt(void)
 {
   shutdown_power_off();
 }
 
-static void syscall_exit(int status)
+void syscall_exit(int status)
 {
   struct thread *cur = thread_current();
   cur->exit_status = status;
@@ -186,17 +179,19 @@ static void syscall_exit(int status)
   thread_exit();
 }
 
-static pid_t syscall_exec(const char *file)
+pid_t syscall_exec(const char *file)
 {
+  // printf("\n\tsyscall_exec(%s) called.\n", file);
+  // return (pid_t)process_execute(file);
   return (pid_t)process_execute(file);
 }
 
-static int syscall_wait(pid_t pid)
+int syscall_wait(pid_t pid)
 {
   return process_wait((tid_t)pid);
 }
 
-static int syscall_read(int fd, void *buffer, unsigned size)
+int syscall_read(int fd, void *buffer, unsigned size)
 {
   int bytes_read = 0;
   if (fd == 0) /* STDIN */
@@ -212,12 +207,17 @@ static int syscall_read(int fd, void *buffer, unsigned size)
   return bytes_read;
 }
 
-static int syscall_write(int fd, const void *buffer, unsigned size)
+int syscall_write(int fd, const void *buffer, unsigned size)
 {
   int bytes_written = 0;
   if (fd == 1) /* STDOUT */
   {
     putbuf(buffer, size);
+
+    /* 출력 밀림현상을 막기 위해 출력이 끝난 buffer의 메모리를 clear */
+    // void *buf = buffer;
+    // memset(buf, 0, size);
+
     bytes_written = size;
   }
 

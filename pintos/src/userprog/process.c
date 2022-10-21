@@ -29,6 +29,7 @@ static bool load(const char *cmdline, void (**eip)(void), void **esp);
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t process_execute(const char *file_name)
 {
+  // printf("\n\tprocess_execute(%s) called.\n", file_name);
   char *fn_copy;
   tid_t tid;
 
@@ -47,9 +48,18 @@ tid_t process_execute(const char *file_name)
        *thread_name, *save_ptr;
   strlcpy(file_name_copy, file_name, 128);
   thread_name = strtok_r(file_name_copy, delimiter, &save_ptr);
+
+  if (filesys_open(file_name_copy) == NULL)
+    return TID_ERROR;
+
   tid = thread_create(thread_name, PRI_DEFAULT, start_process, fn_copy);
+
+  // printf("\t thread %s tid: %d\n", thread_name, (int)tid);
+
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
+
+  // printf("\n\tprocess_execute(%s) finished.\n", file_name);
   return tid;
 }
 
@@ -59,6 +69,7 @@ static void
 start_process(void *file_name_)
 {
   char *file_name = file_name_;
+  // printf("\n\tstart_process(%s) called.\n", file_name);
   struct intr_frame if_;
   bool success;
 
@@ -101,24 +112,31 @@ start_process(void *file_name_)
    does nothing. */
 int process_wait(tid_t child_tid)
 {
+  // printf("this process is waiting for thread[%d].\n", (int)child_tid);
   struct list_elem *e;
   struct thread *t = NULL;
   int exit_status;
 
+  if (child_tid == TID_ERROR)
+    return (int)TID_ERROR;
+
   for (e = list_begin(&(thread_current()->child)); e != list_end(&(thread_current()->child)); e = list_next(e))
   {
     t = list_entry(e, struct thread, child_elem);
+    // printf("child thread[%d]: %s\n", t->tid, t->name);
     if (child_tid == t->tid)
     {
+      // printf("\t\twaiting thread[%d]: %s\n", t->tid, t->name);
       sema_down(&t->child_wait);
       exit_status = t->exit_status;
+      // printf("\t\texit thread[%d]: %s, exit_status: %d\n", t->tid, t->name, t->exit_status);
       list_remove(&t->child_elem);
       sema_up(&t->child_exit);
       return exit_status;
     }
   }
 
-  return -1;
+  return (int)TID_ERROR;
 }
 
 /* Free the current process's resources. */
@@ -287,6 +305,7 @@ static void construct_stack(int argc, char **argv, void **esp)
    Returns true if successful, false otherwise. */
 bool load(const char *file_name, void (**eip)(void), void **esp)
 {
+  // printf("\n\tload(%s, ...) called.\n", file_name);
   struct thread *t = thread_current();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -315,8 +334,8 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   }
 
   /* Open executable file. */
-  // file = filesys_open(file_name);
   file = filesys_open(argv[0]);
+  // printf("\n\tfile_name: %s, file: %s\n", file_name, argv[0]);
   if (file == NULL)
   {
     // printf("load: %s: open failed\n", file_name);
