@@ -16,4 +16,10 @@ int syscall_wait(pid_t pid);
 int syscall_read(int fd, void *buffer, unsigned size);
 int syscall_write(int fd, const void *buffer, unsigned size);
 
+/* Return nth Fibonacci number. */
+int syscall_fibonacci(int num);
+
+/* Return maximum of 4 integers given. */
+int syscall_max_of_four_int(int num1, int num2, int num3, int num4);
+
 #endif /* userprog/syscall.h */

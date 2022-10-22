@@ -31,6 +31,8 @@ enum
   SYS_INUMBER, /* Returns the inode number for a fd. */
 
   /* 20161250 Jiho Rhee */
+  SYS_FIBO,
+  SYS_MAXOF4INT,
   SYS_MAX /* End of syscall enum.*/
 };
 

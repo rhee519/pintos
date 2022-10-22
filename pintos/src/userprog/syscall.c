@@ -55,6 +55,10 @@ void syscall_init(void)
   syscall_argc[SYS_READDIR] = 2;
   syscall_argc[SYS_ISDIR] = 1;
   syscall_argc[SYS_INUMBER] = 1;
+
+  /* [PROJECT-1] Additional System Calls. */
+  syscall_argc[SYS_FIBO] = 1;
+  syscall_argc[SYS_MAXOF4INT] = 4;
 }
 
 static void
@@ -157,6 +161,18 @@ syscall_handler(struct intr_frame *f UNUSED)
   case SYS_INUMBER: /* Returns the inode number for a fd. */
     // TODO
     break;
+
+  /* [PROJECT-1] Additional System Calls. */
+  case SYS_FIBO:
+    f->eax = syscall_fibonacci((int)esp[1]);
+    break;
+  case SYS_MAXOF4INT:
+    f->eax = syscall_max_of_four_int(
+        (int)esp[1],
+        (int)esp[2],
+        (int)esp[3],
+        (int)esp[4]);
+    break;
   default:
     NOT_REACHED();
     break;
@@ -223,4 +239,35 @@ int syscall_write(int fd, const void *buffer, unsigned size)
 
   /* TODO implementation for other output stream */
   return bytes_written;
+}
+
+/* Return nth Fibonacci number. */
+int syscall_fibonacci(int num)
+{
+  if (num < 0) /* input error */
+    return -1;
+  if (num == 0 || num == 1) /* base case */
+    return num;
+
+  int prev = 1, ret = 1;
+  for (int i = 3; i <= num; i++)
+  {
+    int tmp = ret;
+    ret += prev;
+    prev = tmp;
+  }
+
+  return ret;
+}
+
+/* Return maximum of 4 integers given. */
+int syscall_max_of_four_int(int num1, int num2, int num3, int num4)
+{
+  int ret = num1 > num2 ? num1 : num2;
+  if (ret < num3)
+    ret = num3;
+  if (ret < num4)
+    ret = num4;
+
+  return ret;
 }
