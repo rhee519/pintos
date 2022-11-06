@@ -4,7 +4,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-/* [PROJECT1] */
+/* [PROJECT-1] */
 #include "userprog/process.h"
 #include <debug.h>            /* ASSERT(), NOT_REACHED() */
 #include "devices/shutdown.h" /* shutdown_power_off() */
@@ -12,6 +12,13 @@
 #include <console.h>          /* putbuf() */
 #include "devices/input.h"    /* input_getc() */
 #include <string.h>
+
+/* [PROJECT-2] */
+#include "filesys/file.h"
+#include "filesys/filesys.h"
+#include "threads/synch.h" /* struct lock */
+
+struct lock filesys_lock;
 
 static void syscall_handler(struct intr_frame *);
 
@@ -30,6 +37,7 @@ check_user_addr(const void *vaddr)
 
 void syscall_init(void)
 {
+  lock_init(&filesys_lock);
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 
   /* [PROJECT-1] Initialize argc of each syscall function. */
@@ -37,6 +45,8 @@ void syscall_init(void)
   syscall_argc[SYS_EXIT] = 1;
   syscall_argc[SYS_EXEC] = 1;
   syscall_argc[SYS_WAIT] = 1;
+
+  /* [PROJECT-2] filesys system call functions. */
   syscall_argc[SYS_CREATE] = 2;
   syscall_argc[SYS_REMOVE] = 1;
   syscall_argc[SYS_OPEN] = 1;
@@ -90,51 +100,55 @@ syscall_handler(struct intr_frame *f UNUSED)
   switch (syscall_num)
   {
   /* Projects 2 and later. */
-  case SYS_HALT: /* [PROJECT1] Halt the operating system. */
+  case SYS_HALT: /* [PROJECT-1] Halt the operating system. */
     syscall_halt();
     break;
-  case SYS_EXIT: /* [PROJECT1] Terminate this process. */
+  case SYS_EXIT: /* [PROJECT-1] Terminate this process. */
     syscall_exit((int)esp[1]);
     break;
-  case SYS_EXEC: /* [PROJECT1] Start another process. */
+  case SYS_EXEC: /* [PROJECT-1] Start another process. */
     f->eax = (uint32_t)syscall_exec((const char *)esp[1]);
     break;
-  case SYS_WAIT: /* [PROJECT1] Wait for a child process to die. */
+  case SYS_WAIT: /* [PROJECT-1] Wait for a child process to die. */
     f->eax = syscall_wait((pid_t)esp[1]);
     break;
 
-  case SYS_CREATE: /* Create a file. */
-    // TODO
+  case SYS_CREATE: /* [PROJECT-2] Create a file. */
+    f->eax = syscall_create(
+        (const char *)esp[1],
+        (unsigned int)esp[2]);
     break;
-  case SYS_REMOVE: /* Delete a file. */
-    // TODO
+  case SYS_REMOVE: /* [PROJECT-2] Delete a file. */
+    f->eax = syscall_remove((const char *)esp[1]);
     break;
-  case SYS_OPEN: /* Open a file. */
-    // TODO
+  case SYS_OPEN: /* [PROJECT-2] Open a file. */
+    f->eax = syscall_open((const char *)esp[1]);
     break;
-  case SYS_FILESIZE: /* Obtain a file's size. */
-    // TODO
+  case SYS_FILESIZE: /* [PROJECT-2] Obtain a file's size. */
+    f->eax = syscall_filesize((int)esp[1]);
     break;
-  case SYS_READ: /* [PROJECT1] Read from a file. */
+  case SYS_READ: /* [PROJECT-1] [PROJECT-2] Read from a file. */
     f->eax = syscall_read(
         (int)esp[1],
         (void *)esp[2],
         (unsigned)esp[3]);
     break;
-  case SYS_WRITE: /* [PROJECT1] Write to a file. */
+  case SYS_WRITE: /* [PROJECT-1] [PROJECT-2] Write to a file. */
     f->eax = syscall_write(
         (int)esp[1],
         (void *)esp[2],
         (unsigned)esp[3]);
     break;
-  case SYS_SEEK: /* Change position in a file. */
-    // TODO
+  case SYS_SEEK: /* [PROJECT-2] Change position in a file. */
+    syscall_seek(
+        (int)esp[1],
+        (unsigned int)esp[2]);
     break;
-  case SYS_TELL: /* Report current position in a file. */
-    // TODO
+  case SYS_TELL: /* [PROJECT-2] Report current position in a file. */
+    f->eax = syscall_tell((int)esp[1]);
     break;
-  case SYS_CLOSE: /* Close a file. */
-    // TODO
+  case SYS_CLOSE: /*[PROJECT-2] Close a file. */
+    syscall_close((int)esp[1]);
     break;
 
   /* Project 3 and optionally project 4. */
@@ -191,6 +205,13 @@ void syscall_exit(int status)
 {
   struct thread *cur = thread_current();
   cur->exit_status = status;
+  for (int fd = 3; fd < FILE_NUM_MAX; fd++)
+  {
+    if (cur->fd_table[fd])
+    {
+      file_close(cur->fd_table[fd]);
+    }
+  }
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
   thread_exit();
 }
@@ -209,6 +230,9 @@ int syscall_wait(pid_t pid)
 
 int syscall_read(int fd, void *buffer, unsigned size)
 {
+  check_user_addr(buffer);
+
+  lock_acquire(&filesys_lock);
   int bytes_read = 0;
   if (fd == 0) /* STDIN */
   {
@@ -218,26 +242,51 @@ int syscall_read(int fd, void *buffer, unsigned size)
       *(uint8_t *)(buffer + bytes_read) = input;
     }
   }
+  else if (fd <= 2) /* STDOUT, STDERR */
+  {
+    lock_release(&filesys_lock);
+    syscall_exit(-1);
+  }
+  else /* Read file with file descriptor. */
+  {
+    struct thread *cur = thread_current();
+    struct file *f = cur->fd_table[fd];
+    if (f == NULL)
+    {
+      lock_release(&filesys_lock);
+      syscall_exit(-1);
+    }
+    bytes_read = (int)file_read(f, buffer, (off_t)size);
+  }
 
-  /* TODO implementation for other input stream */
+  lock_release(&filesys_lock);
   return bytes_read;
 }
 
 int syscall_write(int fd, const void *buffer, unsigned size)
 {
+  check_user_addr(buffer);
+
+  lock_acquire(&filesys_lock);
   int bytes_written = 0;
   if (fd == 1) /* STDOUT */
   {
     putbuf(buffer, size);
-
-    /* 출력 밀림현상을 막기 위해 출력이 끝난 buffer의 메모리를 clear */
-    // void *buf = buffer;
-    // memset(buf, 0, size);
-
     bytes_written = size;
   }
+  else if (fd >= 3) /* Write to file with file descriptor. */
+  {
+    struct thread *cur = thread_current();
+    struct file *f = cur->fd_table[fd];
+    if (f == NULL)
+    {
+      lock_release(&filesys_lock);
+      syscall_exit(-1);
+    }
+    bytes_written = file_write(f, buffer, (off_t)size);
+  }
 
-  /* TODO implementation for other output stream */
+  lock_release(&filesys_lock);
   return bytes_written;
 }
 
@@ -270,4 +319,100 @@ int syscall_max_of_four_int(int num1, int num2, int num3, int num4)
     ret = num4;
 
   return ret;
+}
+
+/**
+ * [PROJECT-2] filesys system call implementation.
+ */
+bool syscall_create(const char *file, unsigned initial_size)
+{
+  check_user_addr(file);
+
+  if (file == NULL)
+    syscall_exit(-1);
+
+  return filesys_create(file, (off_t)initial_size);
+}
+
+bool syscall_remove(const char *file)
+{
+  check_user_addr(file);
+
+  if (file == NULL)
+    syscall_exit(-1);
+
+  return filesys_remove(file);
+}
+
+int syscall_open(const char *file)
+{
+  check_user_addr(file);
+
+  lock_acquire(&filesys_lock);
+  if (file == NULL)
+  {
+    lock_acquire(&filesys_lock);
+    syscall_exit(-1);
+  }
+
+  struct file *f = filesys_open(file);
+
+  int fd = -1;
+  if (f)
+  {
+    struct thread *cur = thread_current();
+    for (int i = 3; i < FILE_NUM_MAX; i++)
+    {
+      if (cur->fd_table[i] == NULL)
+      {
+        cur->fd_table[i] = f;
+        fd = i;
+        break;
+      }
+    }
+  }
+
+  lock_release(&filesys_lock);
+  return fd;
+}
+
+int syscall_filesize(int fd)
+{
+  struct thread *cur = thread_current();
+  struct file *f = cur->fd_table[fd];
+  if (f == NULL)
+    syscall_exit(-1);
+
+  return file_length(f);
+}
+
+void syscall_seek(int fd, unsigned position)
+{
+  struct thread *cur = thread_current();
+  struct file *f = cur->fd_table[fd];
+  if (f == NULL)
+    syscall_exit(-1);
+
+  file_seek(f, (off_t)position);
+}
+
+unsigned syscall_tell(int fd)
+{
+  struct thread *cur = thread_current();
+  struct file *f = cur->fd_table[fd];
+  if (f == NULL)
+    syscall_exit(-1);
+
+  return file_tell(f);
+}
+
+void syscall_close(int fd)
+{
+  struct thread *cur = thread_current();
+  struct file *f = cur->fd_table[fd];
+  if (f == NULL)
+    syscall_exit(-1);
+
+  cur->fd_table[fd] = NULL;
+  file_close(f);
 }

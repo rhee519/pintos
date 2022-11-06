@@ -26,6 +26,11 @@ typedef int tid_t;
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63     /* Highest priority. */
 
+/**
+ * [PROJECT-2] Jiho Rhee
+ */
+#define FILE_NUM_MAX 128 /* http://www.scs.stanford.edu/10wi-cs140/pintos/pintos_3.html#SEC35:~:text=Can%20I%20set,process%2C%20if%20necessary. */
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -104,6 +109,11 @@ struct thread
    struct semaphore child_wait;
    struct semaphore child_exit;
    int exit_status;
+
+   /**
+    * [PROJECT-2] Jiho Rhee
+    */
+   struct file *fd_table[FILE_NUM_MAX];
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
