@@ -456,8 +456,10 @@ init_thread(struct thread *t, const char *name, int priority)
   intr_set_level(old_level);
 
   t->exit_status = -1;
+  t->parent = running_thread();
   sema_init(&t->child_wait, 0);
   sema_init(&t->child_exit, 0);
+  sema_init(&t->child_load, 0);
   list_init(&t->child);
   list_push_back(&(running_thread()->child), &(t->child_elem));
 

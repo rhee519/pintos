@@ -53,13 +53,12 @@ tid_t process_execute(const char *file_name)
     return TID_ERROR;
 
   tid = thread_create(thread_name, PRI_DEFAULT, start_process, fn_copy);
-
-  // printf("\t thread %s tid: %d\n", thread_name, (int)tid);
+  struct thread *cur = thread_current();
+  sema_down(&cur->child_load);
 
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
 
-  // printf("\n\tprocess_execute(%s) finished.\n", file_name);
   return tid;
 }
 
@@ -82,9 +81,11 @@ start_process(void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page(file_name);
+  struct thread *cur = thread_current();
+  sema_up(&cur->parent->child_load);
   if (!success)
   {
-    thread_current()->exit_status = -1;
+    cur->exit_status = -1;
     thread_exit();
   }
 
@@ -164,6 +165,19 @@ void process_exit(void)
 
   sema_up(&cur->child_wait);
   sema_down(&cur->child_exit);
+
+  /**
+   * [PROJECT-2]
+   * If exist(s) file opened, close all.
+   */
+  for (int i = 3; i < FILE_NUM_MAX; i++)
+  {
+    if (cur->fd_table[i] != NULL)
+    {
+      file_close(cur->fd_table[i]);
+      cur->fd_table[i] = NULL;
+    }
+  }
 }
 
 /* Sets up the CPU for running user code in the current
@@ -305,7 +319,6 @@ static void construct_stack(int argc, char **argv, void **esp)
    Returns true if successful, false otherwise. */
 bool load(const char *file_name, void (**eip)(void), void **esp)
 {
-  // printf("\n\tload(%s, ...) called.\n", file_name);
   struct thread *t = thread_current();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -420,19 +433,11 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   construct_stack(argc, argv, esp);
   // hex_dump((uintptr_t)*esp, *esp, PHYS_BASE - *esp, true);
 
-  // printf("\n\nfrom load()\n");
-  // printf("addr of return value: %p\n", *esp);
-  // printf("rv: %d\n", *(int *)(*esp));
-  // printf("addr of argc: %p\n", *esp + 4);
-  // printf("argc: %d\n", *(int *)(*esp + 4));
-  // printf("addr of argv: %p\n", esp + 8);
-  // printf("argv: %d\n", *(int *)(*esp + 8));
-
   success = true;
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
+  // file_close(file);
   return success;
 }
 

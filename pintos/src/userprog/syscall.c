@@ -18,6 +18,8 @@
 #include "filesys/filesys.h"
 #include "threads/synch.h" /* struct lock */
 
+#define FD_ERROR -1
+
 struct lock filesys_lock;
 
 static void syscall_handler(struct intr_frame *);
@@ -271,6 +273,25 @@ int syscall_write(int fd, const void *buffer, unsigned size)
   int bytes_written = 0;
   if (fd == 1) /* STDOUT */
   {
+    // /* debug */
+    // printf("\n\t syscall_write debug.\n");
+    // hex_dump((uintptr_t)buffer, buffer, 100, true);
+    // printf("---------------------\n");
+    // unsigned int bufsize = 16;
+    // int bufcnt = 0;
+
+    // while (size > bufsize)
+    // {
+    //   putbuf(buffer + bufsize * (bufcnt++), bufsize);
+    //   bytes_written += bufsize;
+    //   size -= bufsize;
+    // }
+    // if (size > 0)
+    // {
+    //   putbuf(buffer + bufsize * bufcnt, size);
+    //   bytes_written += size;
+    // }
+
     putbuf(buffer, size);
     bytes_written = size;
   }
@@ -283,7 +304,10 @@ int syscall_write(int fd, const void *buffer, unsigned size)
       lock_release(&filesys_lock);
       syscall_exit(-1);
     }
-    bytes_written = file_write(f, buffer, (off_t)size);
+    if (!write_denied(f))
+    {
+      bytes_written = file_write(f, buffer, (off_t)size);
+    }
   }
 
   lock_release(&filesys_lock);
@@ -356,17 +380,22 @@ int syscall_open(const char *file)
   }
 
   struct file *f = filesys_open(file);
+  int fd = FD_ERROR;
 
-  int fd = -1;
   if (f)
   {
     struct thread *cur = thread_current();
     for (int i = 3; i < FILE_NUM_MAX; i++)
     {
+      /* Allocate minimum file descriptor to newly opened file. */
       if (cur->fd_table[i] == NULL)
       {
         cur->fd_table[i] = f;
         fd = i;
+
+        /* Once file opened, then other process' must be denied to write. */
+        if (strcmp(cur->name, file) == 0)
+          file_deny_write(f);
         break;
       }
     }

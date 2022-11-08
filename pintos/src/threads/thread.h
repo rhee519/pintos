@@ -103,11 +103,13 @@ struct thread
    /**
     * [PROJECT-1] Jiho Rhee
     */
+   struct thread *parent;
    struct list child;
    struct list_elem child_elem;
 
    struct semaphore child_wait;
    struct semaphore child_exit;
+   struct semaphore child_load;
    int exit_status;
 
    /**
