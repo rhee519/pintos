@@ -59,6 +59,13 @@ tid_t process_execute(const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
 
+  // for (struct list_elem *e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
+  // {
+  //   struct thread *child_thread = list_entry(e, struct thread, child_elem);
+  //   // if (child_thread->exit_status == -1)
+  //   process_wait(tid);
+  // }
+
   return tid;
 }
 
@@ -113,7 +120,6 @@ start_process(void *file_name_)
    does nothing. */
 int process_wait(tid_t child_tid)
 {
-  // printf("this process is waiting for thread[%d].\n", (int)child_tid);
   struct list_elem *e;
   struct thread *t = NULL;
   int exit_status;
@@ -124,13 +130,10 @@ int process_wait(tid_t child_tid)
   for (e = list_begin(&(thread_current()->child)); e != list_end(&(thread_current()->child)); e = list_next(e))
   {
     t = list_entry(e, struct thread, child_elem);
-    // printf("child thread[%d]: %s\n", t->tid, t->name);
-    if (child_tid == t->tid)
+    if (child_tid == t->tid && t->parent == thread_current())
     {
-      // printf("\t\twaiting thread[%d]: %s\n", t->tid, t->name);
       sema_down(&t->child_wait);
       exit_status = t->exit_status;
-      // printf("\t\texit thread[%d]: %s, exit_status: %d\n", t->tid, t->name, t->exit_status);
       list_remove(&t->child_elem);
       sema_up(&t->child_exit);
       return exit_status;
@@ -177,6 +180,12 @@ void process_exit(void)
       file_close(cur->fd_table[i]);
       cur->fd_table[i] = NULL;
     }
+  }
+
+  for (struct list_elem *e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
+  {
+    struct thread *child_thread = list_entry(e, struct thread, child_elem);
+    process_wait(child_thread->tid);
   }
 }
 

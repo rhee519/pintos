@@ -20,6 +20,7 @@
 
 #define FD_ERROR -1
 
+/* synchronization of file syscall APIs */
 struct lock filesys_lock;
 
 static void syscall_handler(struct intr_frame *);
@@ -209,10 +210,7 @@ void syscall_exit(int status)
   cur->exit_status = status;
   for (int fd = 3; fd < FILE_NUM_MAX; fd++)
   {
-    if (cur->fd_table[fd])
-    {
-      file_close(cur->fd_table[fd]);
-    }
+    syscall_close(fd);
   }
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
   thread_exit();
@@ -245,6 +243,11 @@ int syscall_read(int fd, void *buffer, unsigned size)
     }
   }
   else if (fd <= 2) /* STDOUT, STDERR */
+  {
+    lock_release(&filesys_lock);
+    syscall_exit(-1);
+  }
+  else if (fd >= FILE_NUM_MAX) /* FD is out-of-range */
   {
     lock_release(&filesys_lock);
     syscall_exit(-1);
@@ -352,20 +355,34 @@ bool syscall_create(const char *file, unsigned initial_size)
 {
   check_user_addr(file);
 
-  if (file == NULL)
-    syscall_exit(-1);
+  // lock_acquire(&filesys_lock);
 
-  return filesys_create(file, (off_t)initial_size);
+  if (file == NULL)
+  {
+    // lock_release(&filesys_lock);
+    syscall_exit(-1);
+  }
+
+  bool success = filesys_create(file, (off_t)initial_size);
+  // lock_release(&filesys_lock);
+  return success;
 }
 
 bool syscall_remove(const char *file)
 {
   check_user_addr(file);
 
-  if (file == NULL)
-    syscall_exit(-1);
+  // lock_acquire(&filesys_lock);
 
-  return filesys_remove(file);
+  if (file == NULL)
+  {
+    // lock_release(&filesys_lock);
+    syscall_exit(-1);
+  }
+
+  bool success = filesys_remove(file);
+  // lock_release(&filesys_lock);
+  return success;
 }
 
 int syscall_open(const char *file)
@@ -375,7 +392,7 @@ int syscall_open(const char *file)
   lock_acquire(&filesys_lock);
   if (file == NULL)
   {
-    lock_acquire(&filesys_lock);
+    lock_release(&filesys_lock);
     syscall_exit(-1);
   }
 
@@ -407,41 +424,65 @@ int syscall_open(const char *file)
 
 int syscall_filesize(int fd)
 {
+  // lock_acquire(&filesys_lock);
+
   struct thread *cur = thread_current();
   struct file *f = cur->fd_table[fd];
   if (f == NULL)
+  {
+    // lock_release(&filesys_lock);
     syscall_exit(-1);
+  }
 
-  return file_length(f);
+  off_t size = file_length(f);
+  // lock_release(&filesys_lock);
+  return size;
 }
 
 void syscall_seek(int fd, unsigned position)
 {
+  // lock_acquire(&filesys_lock);
+
   struct thread *cur = thread_current();
   struct file *f = cur->fd_table[fd];
   if (f == NULL)
+  {
+    // lock_release(&filesys_lock);
     syscall_exit(-1);
+  }
 
   file_seek(f, (off_t)position);
+  // lock_release(&filesys_lock);
 }
 
 unsigned syscall_tell(int fd)
 {
+  // lock_acquire(&filesys_lock);
+
   struct thread *cur = thread_current();
   struct file *f = cur->fd_table[fd];
   if (f == NULL)
+  {
+    // lock_release(&filesys_lock);
     syscall_exit(-1);
+  }
 
-  return file_tell(f);
+  off_t pos = file_tell(f);
+  // lock_release(&filesys_lock);
+  return pos;
 }
 
 void syscall_close(int fd)
 {
+  // lock_acquire(&filesys_lock);
+
   struct thread *cur = thread_current();
   struct file *f = cur->fd_table[fd];
-  if (f == NULL)
-    syscall_exit(-1);
+  // if (f == NULL)
+  //   syscall_exit(-1);
 
   cur->fd_table[fd] = NULL;
   file_close(f);
+
+  // lock_release(&filesys_lock);
 }
