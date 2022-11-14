@@ -29,7 +29,6 @@ static bool load(const char *cmdline, void (**eip)(void), void **esp);
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t process_execute(const char *file_name)
 {
-  // printf("\n\tprocess_execute(%s) called.\n", file_name);
   char *fn_copy;
   tid_t tid;
 
@@ -54,24 +53,11 @@ tid_t process_execute(const char *file_name)
 
   tid = thread_create(thread_name, PRI_DEFAULT, start_process, fn_copy);
 
-  /* DEBUG */
-  // printf("\n\t process_execute(%s) run.", file_name);
-  // printf("\n\t tid: %d\n", tid);
-
   struct thread *cur = thread_current();
   sema_down(&cur->child_load);
 
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
-
-  // for (struct list_elem *e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
-  // {
-  //   struct thread *child_thread = list_entry(e, struct thread, child_elem);
-  //   // if (child_thread->terminated || !child_thread->loaded)
-  //   //   return process_wait(tid);
-  //   // if (child_thread->exit_status == -1)
-  //   //   return -1;
-  // }
 
   return tid;
 }
@@ -82,7 +68,6 @@ static void
 start_process(void *file_name_)
 {
   char *file_name = file_name_;
-  // printf("\n\tstart_process(%s) called.\n", file_name);
   struct intr_frame if_;
   bool success;
 
@@ -130,9 +115,6 @@ start_process(void *file_name_)
    does nothing. */
 int process_wait(tid_t child_tid)
 {
-  /* DEBUG */
-  // printf("\n\t parent [%d] wait for child [%d]\n", thread_current()->tid, child_tid);
-
   struct list_elem *e;
   struct thread *child_t = NULL;
   int exit_status = -1;
@@ -153,9 +135,6 @@ int process_wait(tid_t child_tid)
     }
   }
 
-  // printf("\n\t parent [%d] wait for child [%d] finished.\n", thread_current()->tid, child_tid);
-  // printf("\t exit code: %d\n", exit_status);
-  // return exit_status;
   return -1;
 }
 
@@ -194,12 +173,6 @@ void process_exit(void)
       cur->fd_table[i] = NULL;
     }
   }
-
-  // for (struct list_elem *e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
-  // {
-  //   struct thread *child_thread = list_entry(e, struct thread, child_elem);
-  //   process_wait(child_thread->tid);
-  // }
 
   sema_up(&cur->child_wait);
   sema_down(&cur->child_exit);
@@ -334,8 +307,6 @@ static void construct_stack(int argc, char **argv, void **esp)
   /* return address */
   *esp -= 4;
   **(uint32_t **)esp = 0;
-
-  // hex_dump((uintptr_t)*esp, *esp, PHYS_BASE - *esp, true);
 }
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
@@ -373,10 +344,8 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
 
   /* Open executable file. */
   file = filesys_open(argv[0]);
-  // printf("\n\tfile_name: %s, file: %s\n", file_name, argv[0]);
   if (file == NULL)
   {
-    // printf("load: %s: open failed\n", file_name);
     printf("load: %s: open failed\n", argv[0]);
     goto done;
   }
@@ -384,7 +353,6 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 || ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Elf32_Phdr) || ehdr.e_phnum > 1024)
   {
-    // printf("load: %s: error loading executable\n", file_name);
     printf("load: %s: error loading executable\n", argv[0]);
     goto done;
   }

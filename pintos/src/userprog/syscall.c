@@ -213,22 +213,12 @@ void syscall_exit(int status)
     syscall_close(fd);
   }
 
-  /* REAL */
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
-
-  /* DEBUG */
-  // printf("[tid %d] %s: exit(%d)\n", cur->tid, cur->name, cur->exit_status);
-  // printf("\t tid: %d, exit_status: %d, terminated: %s, loaded: %s \n\n",
-  //        cur->tid,
-  //        cur->exit_status,
-  //        cur->terminated ? "true" : "false",
-  //        cur->loaded ? "true" : "false");
   thread_exit();
 }
 
 pid_t syscall_exec(const char *file)
 {
-  // printf("\n\tsyscall_exec(%s) called.\n", file);
   tid_t child_tid = process_execute(file);
   struct thread *child_t, *cur = thread_current();
   struct list_elem *e;
@@ -236,23 +226,14 @@ pid_t syscall_exec(const char *file)
   for (e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
   {
     child_t = list_entry(e, struct thread, child_elem);
-    // process_wait(child_t->tid);
 
     if (child_tid == child_t->tid)
     {
       if (!child_t->loaded)
-      {
-        // printf("parent %d executed child %d.\n", cur->tid, child_tid);
-        // printf("parent [%d]\n", cur->tid);
-        // printf("child [%d] load failed!\n", child_tid);
         return (pid_t)TID_ERROR;
-      }
-      // else
-      //   return (pid_t)TID_ERROR;
     }
   }
-  // process_wait(child_tid);
-  // return (pid_t)process_execute(file);
+
   return (pid_t)child_tid;
 }
 
@@ -309,25 +290,6 @@ int syscall_write(int fd, const void *buffer, unsigned size)
   int bytes_written = 0;
   if (fd == 1) /* STDOUT */
   {
-    // /* debug */
-    // printf("\n\t syscall_write debug.\n");
-    // hex_dump((uintptr_t)buffer, buffer, 100, true);
-    // printf("---------------------\n");
-    // unsigned int bufsize = 16;
-    // int bufcnt = 0;
-
-    // while (size > bufsize)
-    // {
-    //   putbuf(buffer + bufsize * (bufcnt++), bufsize);
-    //   bytes_written += bufsize;
-    //   size -= bufsize;
-    // }
-    // if (size > 0)
-    // {
-    //   putbuf(buffer + bufsize * bufcnt, size);
-    //   bytes_written += size;
-    // }
-
     putbuf(buffer, size);
     bytes_written = size;
   }
@@ -388,16 +350,10 @@ bool syscall_create(const char *file, unsigned initial_size)
 {
   check_user_addr(file);
 
-  // lock_acquire(&filesys_lock);
-
   if (file == NULL)
-  {
-    // lock_release(&filesys_lock);
     syscall_exit(-1);
-  }
 
   bool success = filesys_create(file, (off_t)initial_size);
-  // lock_release(&filesys_lock);
   return success;
 }
 
@@ -405,16 +361,10 @@ bool syscall_remove(const char *file)
 {
   check_user_addr(file);
 
-  // lock_acquire(&filesys_lock);
-
   if (file == NULL)
-  {
-    // lock_release(&filesys_lock);
     syscall_exit(-1);
-  }
 
   bool success = filesys_remove(file);
-  // lock_release(&filesys_lock);
   return success;
 }
 
@@ -426,41 +376,20 @@ int syscall_open(const char *file)
   if (file == NULL)
   {
     lock_release(&filesys_lock);
-    // syscall_exit(-1);
     return -1;
   }
 
   struct file *f = filesys_open(file);
   int fd = FD_ERROR;
 
-  // if (f == NULL) {
-  //   lock_release(&filesys_lock);
-  //   return -1;
-  // }
   if (f)
   {
     struct thread *cur = thread_current();
-    // for (int i = 3; i < FILE_NUM_MAX; i++)
-    // {
-    //   /* Allocate minimum file descriptor to newly opened file. */
-    //   if (cur->fd_table[i] == NULL)
-    //   {
-    //     cur->fd_table[i] = f;
-    //     fd = i;
-
-    //     /* Once file opened, then other process' must be denied to write. */
-    //     if (strcmp(cur->name, file) == 0)
-    //       file_deny_write(f);
-    //     break;
-    //   }
-    // }
     fd = cur->fd_max;
     if (fd >= FILE_NUM_MAX)
     {
-      // printf("FD out-of-range\n");
       file_close(f);
       lock_release(&filesys_lock);
-      // syscall_exit(-1);
       return -1;
     }
     cur->fd_table[cur->fd_max++] = f;
@@ -474,62 +403,42 @@ int syscall_open(const char *file)
 
 int syscall_filesize(int fd)
 {
-  // lock_acquire(&filesys_lock);
-
   struct thread *cur = thread_current();
   struct file *f = cur->fd_table[fd];
   if (f == NULL)
   {
-    // lock_release(&filesys_lock);
     syscall_exit(-1);
   }
 
   off_t size = file_length(f);
-  // lock_release(&filesys_lock);
   return size;
 }
 
 void syscall_seek(int fd, unsigned position)
 {
-  // lock_acquire(&filesys_lock);
-
   struct thread *cur = thread_current();
   struct file *f = cur->fd_table[fd];
   if (f == NULL)
-  {
-    // lock_release(&filesys_lock);
     syscall_exit(-1);
-  }
 
   file_seek(f, (off_t)position);
-  // lock_release(&filesys_lock);
 }
 
 unsigned syscall_tell(int fd)
 {
-  // lock_acquire(&filesys_lock);
-
   struct thread *cur = thread_current();
   struct file *f = cur->fd_table[fd];
   if (f == NULL)
-  {
-    // lock_release(&filesys_lock);
     syscall_exit(-1);
-  }
 
   off_t pos = file_tell(f);
-  // lock_release(&filesys_lock);
   return pos;
 }
 
 void syscall_close(int fd)
 {
-  // lock_acquire(&filesys_lock);
-
   struct thread *cur = thread_current();
   struct file *f = cur->fd_table[fd];
   file_close(f);
   cur->fd_table[fd] = NULL;
-
-  // lock_release(&filesys_lock);
 }
