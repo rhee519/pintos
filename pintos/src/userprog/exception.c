@@ -155,7 +155,7 @@ page_fault(struct intr_frame *f)
     * [PROJECT-1] Jiho Rhee
     * Reject if user program access kernel memory space.
     */
-   if (!user || fault_addr == NULL || is_kernel_vaddr(fault_addr) || not_present)
+   if (!user || fault_addr == NULL || !is_user_vaddr(fault_addr) || is_kernel_vaddr(fault_addr) || not_present)
       syscall_exit(-1);
    // if (pagedir_get_page(thread_current()->pagedir, fault_addr) == NULL)
    //    syscall_exit(-1);

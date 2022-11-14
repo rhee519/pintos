@@ -111,11 +111,14 @@ struct thread
    struct semaphore child_exit;
    struct semaphore child_load;
    int exit_status;
+   bool terminated;
+   bool loaded;
 
    /**
     * [PROJECT-2] Jiho Rhee
     */
    struct file *fd_table[FILE_NUM_MAX];
+   int fd_max;
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
