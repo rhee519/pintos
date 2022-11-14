@@ -157,8 +157,8 @@ page_fault(struct intr_frame *f)
     */
    if (!user || fault_addr == NULL || !is_user_vaddr(fault_addr) || is_kernel_vaddr(fault_addr) || not_present)
       syscall_exit(-1);
-   if (pagedir_get_page(thread_current()->pagedir, fault_addr) == NULL)
-      syscall_exit(-1);
+   // if (pagedir_get_page(thread_current()->pagedir, fault_addr) == NULL)
+   //    syscall_exit(-1);
 
    /* To implement virtual memory, delete the rest of the function
       body, and replace it with code that brings in the page to

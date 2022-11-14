@@ -189,6 +189,7 @@ int main(int argc, char *argv[])
     msg("end");
   }
 
+  printf("multi-oom %d return %d\n", n, expected_depth);
   return expected_depth;
 }
 // vim: sw=2

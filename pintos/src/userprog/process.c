@@ -67,7 +67,7 @@ tid_t process_execute(const char *file_name)
   for (struct list_elem *e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
   {
     struct thread *child_thread = list_entry(e, struct thread, child_elem);
-    if (child_thread->terminated)
+    if (child_thread->terminated || !child_thread->loaded)
       return process_wait(tid);
   }
 
@@ -94,15 +94,15 @@ start_process(void *file_name_)
   /* If load failed, quit. */
   palloc_free_page(file_name);
   struct thread *cur = thread_current();
+  sema_up(&cur->parent->child_load);
+
   if (!success)
   {
     cur->exit_status = -1;
     cur->terminated = true;
-    sema_up(&cur->parent->child_load);
     thread_exit();
   }
   cur->loaded = true;
-  sema_up(&cur->parent->child_load);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -132,21 +132,21 @@ int process_wait(tid_t child_tid)
   printf("\n\t parent [%d] wait for child [%d]\n", thread_current()->tid, child_tid);
 
   struct list_elem *e;
-  struct thread *t = NULL;
+  struct thread *child_t = NULL;
   int exit_status = -1;
 
   if (child_tid == TID_ERROR)
-    return exit_status;
+    return -1;
 
   for (e = list_begin(&(thread_current()->child)); e != list_end(&(thread_current()->child)); e = list_next(e))
   {
-    t = list_entry(e, struct thread, child_elem);
-    if (child_tid == t->tid && t->parent == thread_current())
+    child_t = list_entry(e, struct thread, child_elem);
+    if (child_tid == child_t->tid && child_t->parent == thread_current())
     {
-      sema_down(&t->child_wait);
-      exit_status = t->exit_status;
-      list_remove(&t->child_elem);
-      sema_up(&t->child_exit);
+      sema_down(&child_t->child_wait);
+      exit_status = child_t->exit_status;
+      list_remove(&child_t->child_elem);
+      sema_up(&child_t->child_exit);
       // return exit_status;
     }
   }
