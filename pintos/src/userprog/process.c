@@ -53,6 +53,11 @@ tid_t process_execute(const char *file_name)
     return TID_ERROR;
 
   tid = thread_create(thread_name, PRI_DEFAULT, start_process, fn_copy);
+
+  /* DEBUG */
+  printf("\n\t process_execute(%s) run.", file_name);
+  printf("\n\t tid: %d\n", tid);
+
   struct thread *cur = thread_current();
   sema_down(&cur->child_load);
 
@@ -63,7 +68,11 @@ tid_t process_execute(const char *file_name)
   // {
   //   struct thread *child_thread = list_entry(e, struct thread, child_elem);
   //   // if (child_thread->exit_status == -1)
-  //   process_wait(tid);
+  //   //   process_wait(tid);
+  //   if (child_thread->terminated)
+  //   {
+  //     process_wait(tid);
+  //   }
   // }
 
   return tid;
@@ -93,6 +102,7 @@ start_process(void *file_name_)
   if (!success)
   {
     cur->exit_status = -1;
+    cur->terminated = true;
     thread_exit();
   }
 
@@ -120,12 +130,15 @@ start_process(void *file_name_)
    does nothing. */
 int process_wait(tid_t child_tid)
 {
+  /* DEBUG */
+  printf("\n\t parent_tid: %d wait for child_tid: %d\n", thread_current()->tid, child_tid);
+
   struct list_elem *e;
   struct thread *t = NULL;
-  int exit_status;
+  int exit_status = TID_ERROR;
 
   if (child_tid == TID_ERROR)
-    return (int)TID_ERROR;
+    return exit_status;
 
   for (e = list_begin(&(thread_current()->child)); e != list_end(&(thread_current()->child)); e = list_next(e))
   {
@@ -136,11 +149,11 @@ int process_wait(tid_t child_tid)
       exit_status = t->exit_status;
       list_remove(&t->child_elem);
       sema_up(&t->child_exit);
-      return exit_status;
+      // return exit_status;
     }
   }
 
-  return (int)TID_ERROR;
+  return exit_status;
 }
 
 /* Free the current process's resources. */
@@ -166,9 +179,6 @@ void process_exit(void)
     pagedir_destroy(pd);
   }
 
-  sema_up(&cur->child_wait);
-  sema_down(&cur->child_exit);
-
   /**
    * [PROJECT-2]
    * If exist(s) file opened, close all.
@@ -182,11 +192,14 @@ void process_exit(void)
     }
   }
 
-  for (struct list_elem *e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
-  {
-    struct thread *child_thread = list_entry(e, struct thread, child_elem);
-    process_wait(child_thread->tid);
-  }
+  // for (struct list_elem *e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
+  // {
+  //   struct thread *child_thread = list_entry(e, struct thread, child_elem);
+  //   process_wait(child_thread->tid);
+  // }
+
+  sema_up(&cur->child_wait);
+  sema_down(&cur->child_exit);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -446,7 +459,7 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
 
 done:
   /* We arrive here whether the load is successful or not. */
-  // file_close(file);
+  file_close(file);
   return success;
 }
 

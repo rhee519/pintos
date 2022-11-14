@@ -456,6 +456,7 @@ init_thread(struct thread *t, const char *name, int priority)
   intr_set_level(old_level);
 
   t->exit_status = -1;
+  t->terminated = false;
   t->parent = running_thread();
   sema_init(&t->child_wait, 0);
   sema_init(&t->child_exit, 0);
@@ -467,6 +468,7 @@ init_thread(struct thread *t, const char *name, int priority)
   {
     t->fd_table[i] = NULL;
   }
+  t->fd_max = 3; /* Next FD to allocate. */
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

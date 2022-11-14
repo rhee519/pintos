@@ -208,11 +208,14 @@ void syscall_exit(int status)
 {
   struct thread *cur = thread_current();
   cur->exit_status = status;
-  for (int fd = 3; fd < FILE_NUM_MAX; fd++)
+  for (int fd = 0; fd < FILE_NUM_MAX; fd++)
   {
     syscall_close(fd);
   }
+
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+  /* DEBUG */
+  printf("\t tid: %d, exit_status: %d, terminated %s: \n\n", cur->tid, cur->exit_status, cur->terminated ? "true" : "false");
   thread_exit();
 }
 
@@ -393,29 +396,43 @@ int syscall_open(const char *file)
   if (file == NULL)
   {
     lock_release(&filesys_lock);
-    syscall_exit(-1);
+    // syscall_exit(-1);
+    return -1;
   }
 
   struct file *f = filesys_open(file);
   int fd = FD_ERROR;
 
+  // if (f == NULL) {
+  //   lock_release(&filesys_lock);
+  //   return -1;
+  // }
   if (f)
   {
     struct thread *cur = thread_current();
-    for (int i = 3; i < FILE_NUM_MAX; i++)
-    {
-      /* Allocate minimum file descriptor to newly opened file. */
-      if (cur->fd_table[i] == NULL)
-      {
-        cur->fd_table[i] = f;
-        fd = i;
+    // for (int i = 3; i < FILE_NUM_MAX; i++)
+    // {
+    //   /* Allocate minimum file descriptor to newly opened file. */
+    //   if (cur->fd_table[i] == NULL)
+    //   {
+    //     cur->fd_table[i] = f;
+    //     fd = i;
 
-        /* Once file opened, then other process' must be denied to write. */
-        if (strcmp(cur->name, file) == 0)
-          file_deny_write(f);
-        break;
-      }
+    //     /* Once file opened, then other process' must be denied to write. */
+    //     if (strcmp(cur->name, file) == 0)
+    //       file_deny_write(f);
+    //     break;
+    //   }
+    // }
+    fd = cur->fd_max;
+    if (fd >= FILE_NUM_MAX)
+    {
+      lock_release(&filesys_lock);
+      syscall_exit(-1);
     }
+    cur->fd_table[cur->fd_max++] = f;
+    if (!strcmp(cur->name, file))
+      file_deny_write(f);
   }
 
   lock_release(&filesys_lock);
@@ -478,11 +495,8 @@ void syscall_close(int fd)
 
   struct thread *cur = thread_current();
   struct file *f = cur->fd_table[fd];
-  // if (f == NULL)
-  //   syscall_exit(-1);
-
-  cur->fd_table[fd] = NULL;
   file_close(f);
+  cur->fd_table[fd] = NULL;
 
   // lock_release(&filesys_lock);
 }
