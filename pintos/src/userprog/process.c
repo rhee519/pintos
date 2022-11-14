@@ -29,7 +29,7 @@ static bool load(const char *cmdline, void (**eip)(void), void **esp);
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t process_execute(const char *file_name)
 {
-  // printf("\n\tprocess_execute(%s) called.\n", file_name);
+  printf("\n\tprocess_execute(%s) called.\n", file_name);
   char *fn_copy;
   tid_t tid;
 
@@ -55,8 +55,8 @@ tid_t process_execute(const char *file_name)
   tid = thread_create(thread_name, PRI_DEFAULT, start_process, fn_copy);
 
   /* DEBUG */
-  printf("\n\t process_execute(%s) run.", file_name);
-  printf("\n\t tid: %d\n", tid);
+  // printf("\n\t process_execute(%s) run.", file_name);
+  // printf("\n\t tid: %d\n", tid);
 
   struct thread *cur = thread_current();
   sema_down(&cur->child_load);
@@ -64,16 +64,12 @@ tid_t process_execute(const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
 
-  // for (struct list_elem *e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
-  // {
-  //   struct thread *child_thread = list_entry(e, struct thread, child_elem);
-  //   // if (child_thread->exit_status == -1)
-  //   //   process_wait(tid);
-  //   if (child_thread->terminated)
-  //   {
-  //     process_wait(tid);
-  //   }
-  // }
+  for (struct list_elem *e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
+  {
+    struct thread *child_thread = list_entry(e, struct thread, child_elem);
+    if (child_thread->terminated)
+      return process_wait(tid);
+  }
 
   return tid;
 }
@@ -98,13 +94,15 @@ start_process(void *file_name_)
   /* If load failed, quit. */
   palloc_free_page(file_name);
   struct thread *cur = thread_current();
-  sema_up(&cur->parent->child_load);
   if (!success)
   {
     cur->exit_status = -1;
     cur->terminated = true;
+    sema_up(&cur->parent->child_load);
     thread_exit();
   }
+  cur->loaded = true;
+  sema_up(&cur->parent->child_load);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -131,11 +129,11 @@ start_process(void *file_name_)
 int process_wait(tid_t child_tid)
 {
   /* DEBUG */
-  printf("\n\t parent_tid: %d wait for child_tid: %d\n", thread_current()->tid, child_tid);
+  printf("\n\t parent [%d] wait for child [%d]\n", thread_current()->tid, child_tid);
 
   struct list_elem *e;
   struct thread *t = NULL;
-  int exit_status = TID_ERROR;
+  int exit_status = -1;
 
   if (child_tid == TID_ERROR)
     return exit_status;
@@ -153,6 +151,8 @@ int process_wait(tid_t child_tid)
     }
   }
 
+  printf("\n\t parent [%d] wait for child [%d] finished.\n", thread_current()->tid, child_tid);
+  printf("\t exit code: %d\n", exit_status);
   return exit_status;
 }
 

@@ -112,6 +112,7 @@ struct thread
    struct semaphore child_load;
    int exit_status;
    bool terminated;
+   bool loaded;
 
    /**
     * [PROJECT-2] Jiho Rhee

@@ -457,6 +457,7 @@ init_thread(struct thread *t, const char *name, int priority)
 
   t->exit_status = -1;
   t->terminated = false;
+  t->loaded = false;
   t->parent = running_thread();
   sema_init(&t->child_wait, 0);
   sema_init(&t->child_exit, 0);

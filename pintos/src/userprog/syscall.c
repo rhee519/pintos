@@ -213,17 +213,47 @@ void syscall_exit(int status)
     syscall_close(fd);
   }
 
-  printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+  /* REAL */
+  // printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+
   /* DEBUG */
-  printf("\t tid: %d, exit_status: %d, terminated %s: \n\n", cur->tid, cur->exit_status, cur->terminated ? "true" : "false");
+  printf("[tid %d] %s: exit(%d)\n", cur->tid, cur->name, cur->exit_status);
+  // printf("\t tid: %d, exit_status: %d, terminated: %s, loaded: %s \n\n",
+  //        cur->tid,
+  //        cur->exit_status,
+  //        cur->terminated ? "true" : "false",
+  //        cur->loaded ? "true" : "false");
   thread_exit();
 }
 
 pid_t syscall_exec(const char *file)
 {
   // printf("\n\tsyscall_exec(%s) called.\n", file);
+  tid_t child_tid = process_execute(file);
+  struct thread *child_t, *cur = thread_current();
+  struct list_elem *e;
+
+  for (e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
+  {
+    child_t = list_entry(e, struct thread, child_elem);
+    // process_wait(child_t->tid);
+
+    if (child_tid == child_t->tid)
+    {
+      if (!child_t->loaded)
+      {
+        // printf("parent %d executed child %d.\n", cur->tid, child_tid);
+        printf("parent [%d]\n", cur->tid);
+        printf("child [%d] load failed!\n", child_tid);
+        return (pid_t)TID_ERROR;
+      }
+      // else
+      //   return (pid_t)TID_ERROR;
+    }
+  }
+  // process_wait(child_tid);
   // return (pid_t)process_execute(file);
-  return (pid_t)process_execute(file);
+  return (pid_t)child_tid;
 }
 
 int syscall_wait(pid_t pid)
