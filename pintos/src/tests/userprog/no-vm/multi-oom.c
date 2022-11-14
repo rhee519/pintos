@@ -68,7 +68,7 @@ static int NO_INLINE
 consume_some_resources_and_die(int seed)
 {
   /* DEBUG */
-  printf("\t\tcrash process. seed: %d\n", seed);
+  // printf("\t\tcrash process. seed: %d\n", seed);
   consume_some_resources();
   random_init(seed);
   volatile int *PHYS_BASE = (volatile int *)0xC0000000;
@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
   n = argc > 1 ? atoi(argv[1]) : 0;
 
   /* DEBUG */
-  printf("\t\tmulti-oom called. n: %d\n", n);
+  // printf("\t\tmulti-oom called. n: %d\n", n);
 
   bool is_at_root = (n == 0);
   if (is_at_root)
@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
     /* If maximum depth is reached, return result. */
     if (child_pid == -1)
     {
-      printf("reached at maximum depth. return %d\n", n);
+      // printf("reached at maximum depth. return %d\n", n);
       return n;
     }
 
@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
     int reached_depth = wait(child_pid);
     if (reached_depth == -1)
     {
-      printf("multi-oom %d failed.\n", n);
+      // printf("multi-oom %d failed.\n", n);
       fail("wait returned -1.");
     }
 
@@ -189,7 +189,7 @@ int main(int argc, char *argv[])
     msg("end");
   }
 
-  printf("multi-oom %d return %d\n", n, expected_depth);
+  // printf("multi-oom %d return %d\n", n, expected_depth);
   return expected_depth;
 }
 // vim: sw=2

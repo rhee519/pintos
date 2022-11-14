@@ -29,7 +29,7 @@ static bool load(const char *cmdline, void (**eip)(void), void **esp);
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t process_execute(const char *file_name)
 {
-  printf("\n\tprocess_execute(%s) called.\n", file_name);
+  // printf("\n\tprocess_execute(%s) called.\n", file_name);
   char *fn_copy;
   tid_t tid;
 
@@ -64,12 +64,14 @@ tid_t process_execute(const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
 
-  for (struct list_elem *e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
-  {
-    struct thread *child_thread = list_entry(e, struct thread, child_elem);
-    if (child_thread->terminated || !child_thread->loaded)
-      return process_wait(tid);
-  }
+  // for (struct list_elem *e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
+  // {
+  //   struct thread *child_thread = list_entry(e, struct thread, child_elem);
+  //   // if (child_thread->terminated || !child_thread->loaded)
+  //   //   return process_wait(tid);
+  //   // if (child_thread->exit_status == -1)
+  //   //   return -1;
+  // }
 
   return tid;
 }
@@ -129,7 +131,7 @@ start_process(void *file_name_)
 int process_wait(tid_t child_tid)
 {
   /* DEBUG */
-  printf("\n\t parent [%d] wait for child [%d]\n", thread_current()->tid, child_tid);
+  // printf("\n\t parent [%d] wait for child [%d]\n", thread_current()->tid, child_tid);
 
   struct list_elem *e;
   struct thread *child_t = NULL;
@@ -147,13 +149,14 @@ int process_wait(tid_t child_tid)
       exit_status = child_t->exit_status;
       list_remove(&child_t->child_elem);
       sema_up(&child_t->child_exit);
-      // return exit_status;
+      return exit_status;
     }
   }
 
-  printf("\n\t parent [%d] wait for child [%d] finished.\n", thread_current()->tid, child_tid);
-  printf("\t exit code: %d\n", exit_status);
-  return exit_status;
+  // printf("\n\t parent [%d] wait for child [%d] finished.\n", thread_current()->tid, child_tid);
+  // printf("\t exit code: %d\n", exit_status);
+  // return exit_status;
+  return -1;
 }
 
 /* Free the current process's resources. */

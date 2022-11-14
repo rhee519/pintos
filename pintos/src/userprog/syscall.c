@@ -214,10 +214,10 @@ void syscall_exit(int status)
   }
 
   /* REAL */
-  // printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+  printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 
   /* DEBUG */
-  printf("[tid %d] %s: exit(%d)\n", cur->tid, cur->name, cur->exit_status);
+  // printf("[tid %d] %s: exit(%d)\n", cur->tid, cur->name, cur->exit_status);
   // printf("\t tid: %d, exit_status: %d, terminated: %s, loaded: %s \n\n",
   //        cur->tid,
   //        cur->exit_status,
@@ -243,8 +243,8 @@ pid_t syscall_exec(const char *file)
       if (!child_t->loaded)
       {
         // printf("parent %d executed child %d.\n", cur->tid, child_tid);
-        printf("parent [%d]\n", cur->tid);
-        printf("child [%d] load failed!\n", child_tid);
+        // printf("parent [%d]\n", cur->tid);
+        // printf("child [%d] load failed!\n", child_tid);
         return (pid_t)TID_ERROR;
       }
       // else
@@ -457,8 +457,11 @@ int syscall_open(const char *file)
     fd = cur->fd_max;
     if (fd >= FILE_NUM_MAX)
     {
+      // printf("FD out-of-range\n");
+      file_close(f);
       lock_release(&filesys_lock);
-      syscall_exit(-1);
+      // syscall_exit(-1);
+      return -1;
     }
     cur->fd_table[cur->fd_max++] = f;
     if (!strcmp(cur->name, file))
