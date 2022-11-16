@@ -377,25 +377,10 @@ int syscall_open(const char *file)
     return -1;
   }
 
-  struct file *fp = filesys_open(file);
+  struct file *f = filesys_open(file);
   int fd = FD_ERROR;
 
-  // if (f)
-  // {
-  //   struct thread *cur = thread_current();
-  //   fd = cur->fd_max;
-  //   if (fd >= FILE_NUM_MAX)
-  //   {
-  //     file_close(f);
-  //     lock_release(&filesys_lock);
-  //     return -1;
-  //   }
-  //   cur->fd_table[cur->fd_max++] = f;
-  //   if (!strcmp(cur->name, file))
-  //     file_deny_write(f);
-  // }
-
-  if (fp == NULL)
+  if (f == NULL)
   {
     lock_release(&filesys_lock);
     return FD_ERROR;
@@ -406,10 +391,10 @@ int syscall_open(const char *file)
   {
     if (cur->fd_table[fd] == NULL)
     {
-      cur->fd_table[fd] = fp;
+      cur->fd_table[fd] = f;
       if (!strcmp(cur->name, file))
       {
-        file_deny_write(fp);
+        file_deny_write(f);
       }
       break;
     }
