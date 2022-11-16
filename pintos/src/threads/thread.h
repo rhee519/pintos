@@ -119,8 +119,6 @@ struct thread
     * [PROJECT-2] Jiho Rhee
     */
    struct file *fd_table[FD_MAX];
-#define FD_ERROR -1
-   int fd_max;
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */

@@ -469,7 +469,6 @@ init_thread(struct thread *t, const char *name, int priority)
   {
     t->fd_table[i] = NULL;
   }
-  t->fd_max = 3; /* Next FD to allocate. */
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
