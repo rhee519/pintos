@@ -465,7 +465,7 @@ init_thread(struct thread *t, const char *name, int priority)
   list_init(&t->child);
   list_push_back(&(running_thread()->child), &(t->child_elem));
 
-  for (int i = 0; i < FILE_NUM_MAX; i++)
+  for (int i = 0; i < FD_MAX; i++)
   {
     t->fd_table[i] = NULL;
   }

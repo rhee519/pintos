@@ -29,7 +29,8 @@ typedef int tid_t;
 /**
  * [PROJECT-2] Jiho Rhee
  */
-#define FILE_NUM_MAX 128 /* http://www.scs.stanford.edu/10wi-cs140/pintos/pintos_3.html#SEC35:~:text=Can%20I%20set,process%2C%20if%20necessary. */
+#define FD_MAX 128 /* http://www.scs.stanford.edu/10wi-cs140/pintos/pintos_3.html#SEC35:~:text=Can%20I%20set,process%2C%20if%20necessary. */
+#define FD_ERROR -1
 
 /* A kernel thread or user process.
 
@@ -117,7 +118,8 @@ struct thread
    /**
     * [PROJECT-2] Jiho Rhee
     */
-   struct file *fd_table[FILE_NUM_MAX];
+   struct file *fd_table[FD_MAX];
+#define FD_ERROR -1
    int fd_max;
 
 #ifdef USERPROG

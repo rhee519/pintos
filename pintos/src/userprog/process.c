@@ -165,7 +165,7 @@ void process_exit(void)
    * [PROJECT-2]
    * If exist(s) file opened, close all.
    */
-  for (int i = 3; i < FILE_NUM_MAX; i++)
+  for (int i = 3; i < FD_MAX; i++)
   {
     if (cur->fd_table[i] != NULL)
     {

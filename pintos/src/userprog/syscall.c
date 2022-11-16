@@ -18,8 +18,6 @@
 #include "filesys/filesys.h"
 #include "threads/synch.h" /* struct lock */
 
-#define FD_ERROR -1
-
 /* synchronization of file syscall APIs */
 struct lock filesys_lock;
 
@@ -208,7 +206,7 @@ void syscall_exit(int status)
 {
   struct thread *cur = thread_current();
   cur->exit_status = status;
-  for (int fd = 0; fd < FILE_NUM_MAX; fd++)
+  for (int fd = 0; fd < FD_MAX; fd++)
   {
     syscall_close(fd);
   }
@@ -261,7 +259,7 @@ int syscall_read(int fd, void *buffer, unsigned size)
     lock_release(&filesys_lock);
     syscall_exit(-1);
   }
-  else if (fd >= FILE_NUM_MAX) /* FD is out-of-range */
+  else if (fd >= FD_MAX) /* FD is out-of-range */
   {
     lock_release(&filesys_lock);
     syscall_exit(-1);
@@ -382,22 +380,32 @@ int syscall_open(const char *file)
   struct file *f = filesys_open(file);
   int fd = FD_ERROR;
 
-  if (f)
+  if (f == NULL)
   {
-    struct thread *cur = thread_current();
-    fd = cur->fd_max;
-    if (fd >= FILE_NUM_MAX)
+    lock_release(&filesys_lock);
+    return FD_ERROR;
+  }
+
+  struct thread *cur = thread_current();
+  for (fd = 3; fd < FD_MAX; fd++)
+  {
+    if (cur->fd_table[fd] == NULL)
     {
-      file_close(f);
-      lock_release(&filesys_lock);
-      return -1;
+      cur->fd_table[fd] = f;
+      if (!strcmp(cur->name, file))
+      {
+        file_deny_write(f);
+      }
+      break;
     }
-    cur->fd_table[cur->fd_max++] = f;
-    if (!strcmp(cur->name, file))
-      file_deny_write(f);
   }
 
   lock_release(&filesys_lock);
+  if (fd == FD_MAX)
+  {
+    return FD_ERROR;
+  }
+
   return fd;
 }
 
