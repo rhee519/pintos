@@ -120,6 +120,12 @@ struct thread
     */
    struct file *fd_table[FD_MAX];
 
+   /**
+    * [PROJECT-3] Jiho Rhee
+    */
+   int64_t wakeup_time;
+   struct list_elem sleep_elem; /* Check if this thread is sleeping. */
+
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
    uint32_t *pagedir; /* Page directory. */
