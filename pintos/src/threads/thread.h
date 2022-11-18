@@ -7,6 +7,12 @@
 
 #include "synch.h"
 
+/* [PROJECT-3] Jiho Rhee */
+#include "threads/synch.h"
+#ifndef USERPROG
+extern bool thread_prior_aging;
+#endif
+
 /* States in a thread's life cycle. */
 enum thread_status
 {
@@ -170,5 +176,8 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+
+/* [PROJECT-3] Jiho Rhee */
+void thread_aging(void);
 
 #endif /* threads/thread.h */

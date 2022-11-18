@@ -54,6 +54,11 @@ static long long user_ticks;   /* # of timer ticks in user programs. */
 #define TIME_SLICE 4          /* # of timer ticks to give each thread. */
 static unsigned thread_ticks; /* # of timer ticks since last yield. */
 
+/* [PROJECT-3] Jiho Rhee */
+#ifndef USERPROG
+bool thread_prior_aging;
+#endif
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -134,6 +139,12 @@ void thread_tick(void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return();
+
+/* [PROJECT-3] Jiho Rhee */
+#ifndef USERPROG
+  if (thread_prior_aging == true)
+    thread_aging();
+#endif
 }
 
 /* Prints thread statistics. */
@@ -583,3 +594,12 @@ allocate_tid(void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof(struct thread, stack);
+
+/**
+ * [PROJECT-3] Jiho Rhee
+ */
+void thread_aging(void)
+{
+  // TODO
+  return;
+}
