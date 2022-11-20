@@ -362,12 +362,9 @@ void thread_foreach(thread_action_func *func, void *aux)
 void thread_set_priority(int new_priority)
 {
   /* [PROJECT-3] */
-  int old_priority = thread_current()->priority;
-  thread_current()->priority = new_priority;
-
-  /* If priority decreases, rescheduling is needed. */
-  if (new_priority < old_priority)
-    thread_yield();
+  thread_current()->init_priority = new_priority;
+  refresh_priority();
+  thread_test_preemption();
 }
 
 /* Returns the current thread's priority. */
@@ -513,6 +510,11 @@ init_thread(struct thread *t, const char *name, int priority)
   {
     t->fd_table[i] = NULL;
   }
+
+  /* [PROJECT-3] Jiho Rhee */
+  t->init_priority = priority;
+  t->wait_on_lock = NULL;
+  list_init(&t->donate_list);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -635,4 +637,85 @@ void thread_aging(void)
 {
   // TODO
   return;
+}
+
+/* Priority donation. */
+void donate_priority(void)
+{
+  /* Nested donation */
+  struct thread *cur = thread_current();
+
+  for (int depth = 0; depth < 8; depth++)
+  {
+    if (!cur->wait_on_lock)
+      break;
+    struct thread *holder = cur->wait_on_lock->holder;
+    ASSERT(holder);
+    holder->priority = cur->priority;
+    cur = holder;
+  }
+}
+
+void remove_with_lock(struct lock *lock)
+{
+  struct thread *cur = thread_current();
+
+  for (struct list_elem *e = list_begin(&cur->donate_list); e != list_end(&cur->donate_list); e = list_next(e))
+  {
+    struct thread *old_holder = list_entry(e, struct thread, donate_elem);
+    if (old_holder->wait_on_lock == lock)
+      list_remove(e);
+  }
+}
+
+// void refresh_priority(void)
+// {
+//   struct thread *cur = thread_current();
+//   cur->priority = cur->init_priority;
+
+//   if (!list_empty(&cur->donate_list))
+//   {
+//     list_sort(&cur->donate_list, priority_compare, NULL);
+//     struct thread *t_highest_pri = list_entry(list_front(&cur->donate_list), struct thread, donate_elem);
+//     if (cur->priority < t_highest_pri->priority)
+//       cur->priority = t_highest_pri->priority;
+//   }
+// }
+
+void refresh_priority(void)
+{
+  struct thread *cur = thread_current();
+
+  cur->priority = cur->init_priority; // init_priority 로 설정 (현재 donate 된 Priority 에서 원래의 priority로 돌려준다)
+
+  // (그런데 nest donate 라서 돌아갈 priority가 여러개라면)
+  if (!list_empty(&cur->donate_list))
+  { // donate_list 리스트에 스레드가 남아있다면 남아있는 스레드 중에서 가장 높은 priority 를 가져와야 한다
+    // priority 가 가장 높은 스레드를 고르기 위해 list_sort 를 사용하여 donate_list 리스트의 원소들을 priority 순으로 내림차순 정렬한다
+    list_sort(&cur->donate_list, priority_compare, 0);
+
+    // 맨 앞의 스레드(priority 가 가장 큰 스레드)를 뽑아서 init_priority 와 비교하여 둘 중 더 큰 priority 를 적용한다
+    struct thread *front = list_entry(list_front(&cur->donate_list), struct thread, donate_elem);
+    if (front->priority > cur->priority)
+      cur->priority = front->priority;
+  }
+}
+
+// void thread_test_preemption(void)
+// {
+//   struct thread *cur = thread_current();
+//   if (!list_empty(&ready_list))
+//   {
+//     struct thread *t_ready_front = list_entry(list_front(&ready_list), struct thread, elem);
+//     if (cur->priority < t_ready_front->priority)
+//       thread_yield();
+//     }
+// }
+
+void thread_test_preemption(void)
+{
+  if (!list_empty(&ready_list) &&
+      thread_current()->priority <
+          list_entry(list_front(&ready_list), struct thread, elem)->priority)
+    thread_yield();
 }
