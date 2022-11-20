@@ -67,8 +67,8 @@ void sema_down(struct semaphore *sema)
   while (sema->value == 0)
   {
     /* [PROJECT-3] */
-    // list_insert_ordered(&sema->waiters, &thread_current()->elem, priority_compare, NULL);
-    list_push_back(&sema->waiters, &thread_current()->elem);
+    // list_push_back(&sema->waiters, &thread_current()->elem);
+    list_insert_ordered(&sema->waiters, &thread_current()->elem, priority_compare, NULL);
     thread_block();
   }
   sema->value--;
@@ -121,9 +121,8 @@ void sema_up(struct semaphore *sema)
                               struct thread, elem));
   }
   sema->value++;
+  thread_test_preemption();
   intr_set_level(old_level);
-
-  thread_yield();
 }
 
 static void sema_test_helper(void *sema_);
@@ -199,8 +198,21 @@ void lock_acquire(struct lock *lock)
   ASSERT(!intr_context());
   ASSERT(!lock_held_by_current_thread(lock));
 
+  /* [PROJECT-3] Jiho Rhee */
+  struct thread *cur = thread_current();
+  if (lock->holder)
+  {
+    /** If lock holder exists, then priority donation might be needed.
+     * CUR donates priority to LOCK->HOLDER.
+     */
+    cur->wait_on_lock = lock;
+    list_insert_ordered(&lock->holder->donate_list, &cur->donate_elem, priority_compare, NULL);
+    donate_priority();
+  }
+
   sema_down(&lock->semaphore);
-  lock->holder = thread_current();
+  cur->wait_on_lock = NULL;
+  lock->holder = cur;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -231,6 +243,10 @@ void lock_release(struct lock *lock)
 {
   ASSERT(lock != NULL);
   ASSERT(lock_held_by_current_thread(lock));
+
+  /* [PROJECT-3] Jiho Rhee */
+  remove_with_lock(lock);
+  refresh_priority();
 
   lock->holder = NULL;
   sema_up(&lock->semaphore);
