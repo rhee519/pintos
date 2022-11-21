@@ -23,27 +23,11 @@ fixed_t f_sub(fixed_t f1, fixed_t f2)
 
 fixed_t f_mul(fixed_t f1, fixed_t f2)
 {
-    int64_t tmp = f1 * f2;
-    return tmp >> B_INT;
+    return (fixed_t)(((int64_t)f1 * f2) >> B_INT);
 }
 
 fixed_t f_div(fixed_t f1, fixed_t f2)
 {
-    return f1 / f2;
-}
-
-fixed_t f_add_i(fixed_t f, int i)
-{
-    return f + (i << B_INT);
-}
-
-fixed_t f_mul_i(fixed_t f, int i)
-{
-    int64_t tmp = f * int_to_fixed(i);
-    return tmp >> B_INT;
-}
-
-fixed_t f_div_i(fixed_t f, int i)
-{
-    return (f / i) >> B_INT;
+    int shift = 32;
+    return (fixed_t)((((int64_t)f1 << shift) / f2) >> (shift - B_INT));
 }

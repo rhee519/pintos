@@ -49,7 +49,6 @@ typedef int tid_t;
 #define NICE_MAX 20    /* Highest nice value. */
 
 #define RECENT_CPU_DEFAULT 0 /* Default of recent_cpu of each thread. */
-fixed_t load_avg;
 
 /* A kernel thread or user process.
 
@@ -212,6 +211,7 @@ void donate_priority(void);
 void remove_with_lock(struct lock *lock);
 void refresh_priority(void);
 void thread_test_preemption(void);
+void thread_test_preemption_on_intr(void);
 
 /* Priority-aging. */
 void update_thread_priority(struct thread *t);

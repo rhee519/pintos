@@ -61,6 +61,9 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 bool thread_prior_aging;
 #endif
 
+/* LOAD_AVG */
+static fixed_t load_avg;
+
 /* [PROJECT-3] Comparison function for priority-descending Sort. */
 bool priority_compare(const struct list_elem *a,
                       const struct list_elem *b,
@@ -153,7 +156,7 @@ void thread_tick(void)
     intr_yield_on_return();
 
 #ifndef USERPROG
-  if (thread_prior_aging == true)
+  if (thread_prior_aging || thread_mlfqs)
     thread_aging();
 #endif
 }
@@ -363,6 +366,9 @@ void thread_foreach(thread_action_func *func, void *aux)
 void thread_set_priority(int new_priority)
 {
   /* [PROJECT-3] */
+  if (thread_mlfqs)
+    return;
+
   thread_current()->init_priority = new_priority;
   refresh_priority();
   thread_test_preemption();
@@ -392,13 +398,13 @@ int thread_get_nice(void)
 /* Returns 100 times the system load average. */
 int thread_get_load_avg(void)
 {
-  return fixed_to_int(f_mul_i(load_avg, 100));
+  return fixed_to_int(load_avg * 100);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void)
 {
-  return fixed_to_int(f_mul_i(thread_current()->recent_cpu, 100));
+  return fixed_to_int(thread_current()->recent_cpu * 100);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -503,8 +509,11 @@ init_thread(struct thread *t, const char *name, int priority)
   t->parent = running_thread();
 
   /* [PROJECT-3] Jiho Rhee */
-  if (t->parent) /* If parent exists, nice value will be inherited. */
+  if (t->parent) /* If parent exists, NICE and RECENT_CPU will be inherited. */
+  {
     t->nice = t->parent->nice;
+    t->recent_cpu = t->parent->recent_cpu;
+  }
 
   sema_init(&t->child_wait, 0);
   sema_init(&t->child_exit, 0);
@@ -697,6 +706,20 @@ void thread_test_preemption(void)
   }
 }
 
+/*  Should running thread yield to another thread?
+    If does, then yield after interrupt overs.
+*/
+void thread_test_preemption_on_intr(void)
+{
+  struct thread *cur = thread_current();
+  if (!list_empty(&ready_list))
+  {
+    struct thread *t_ready_front = list_entry(list_front(&ready_list), struct thread, elem);
+    if (cur->priority < t_ready_front->priority)
+      intr_yield_on_return();
+  }
+}
+
 /**
  * [PROJECT-3] Jiho Rhee
  */
@@ -719,7 +742,7 @@ void update_thread_priority(struct thread *t)
 {
   /* new_priority = PRI_MAX - (recent_cpu / 4) - (2 * nice) */
   int new_priority = PRI_MAX;
-  new_priority -= fixed_to_int(f_div_i(t->recent_cpu, 4));
+  new_priority -= fixed_to_int(t->recent_cpu / 4);
   new_priority -= 2 * t->nice;
 
   if (new_priority > PRI_MAX)
@@ -728,6 +751,7 @@ void update_thread_priority(struct thread *t)
     new_priority = PRI_MIN;
 
   t->priority = new_priority;
+  // thread_test_preemption_on_intr();
 }
 
 /* Update recent_cpu of all the threads. */
@@ -737,13 +761,16 @@ void update_recent_cpu(void)
   {
     struct thread *t = list_entry(e, struct thread, allelem);
 
-    /* recent_cpu = (2 * load_avg) / (2 * load_avg + 1 ) * recent_cpu + nice */
+    /* recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice */
     fixed_t recent_cpu = t->recent_cpu;
-    fixed_t coeff = f_div(f_mul_i(load_avg, 2), f_add_i(f_mul(load_avg, 2), 1));
+    // fixed_t coeff = f_div(f_mul_i(load_avg, 2), f_add_i(f_mul(load_avg, 2), 1));
+    fixed_t coeff = f_div((2 * load_avg), (2 * load_avg + int_to_fixed(1)));
+    // printf("\tcoeff: %d\n", (int)coeff);
     recent_cpu = f_mul(coeff, recent_cpu);
-    recent_cpu = f_add_i(recent_cpu, t->nice);
+    recent_cpu += int_to_fixed(t->nice);
 
     t->recent_cpu = recent_cpu;
+    // printf("recent_cpu: %d\n", (int)recent_cpu);
   }
 }
 
@@ -755,6 +782,11 @@ void update_load_avg(void)
   if (thread_current() != idle_thread)
     ready_threads++;
 
-  load_avg = f_div_i(f_mul_i(load_avg, 59), 60);
-  load_avg += f_div_i(int_to_fixed(ready_threads), 60);
+  // printf("1/60 = %d in fixed-point\n", (int)f_div_i(1 << B_INT, 60));
+  load_avg = load_avg * 59 / 60;
+  // printf("\t59/60 * load_avg = %d\n", fixed_to_int(load_avg));
+  load_avg += int_to_fixed(1) * ready_threads / 60;
+  // printf("\t59/60 * load_avg + 1/60 * ready_threads = %d\n", (int)load_avg);
+  // printf("\tready_threads: %d\n", ready_threads);
+  // printf("\tload_avg: %d\n", (int)load_avg);
 }
