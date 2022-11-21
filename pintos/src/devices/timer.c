@@ -191,6 +191,13 @@ timer_interrupt(struct intr_frame *args UNUSED)
       thread_unblock(sleeping_thread);
     }
   }
+
+  /* Update load_avg and recent_cpu(of all threads) every 1 sec(TIMER_FREQ). */
+  if (ticks % TIMER_FREQ == 0)
+  {
+    update_load_avg();
+    update_recent_cpu();
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
