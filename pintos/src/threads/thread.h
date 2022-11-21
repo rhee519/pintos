@@ -13,6 +13,9 @@
 extern bool thread_prior_aging;
 #endif
 
+/* [PROJECT-3] Jiho Rhee */
+#include "threads/fixed.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
 {
@@ -37,6 +40,16 @@ typedef int tid_t;
  */
 #define FD_MAX 128 /* http://www.scs.stanford.edu/10wi-cs140/pintos/pintos_3.html#SEC35:~:text=Can%20I%20set,process%2C%20if%20necessary. */
 #define FD_ERROR -1
+
+/**
+ * [PROJECT-3] Jiho Rhee
+ */
+#define NICE_MIN -20   /* Lowest nice value. */
+#define NICE_DEFAULT 0 /* Default nice value. */
+#define NICE_MAX 20    /* Highest nice value. */
+
+#define RECENT_CPU_DEFAULT 0 /* Default of recent_cpu of each thread. */
+fixed_t load_avg;
 
 /* A kernel thread or user process.
 
@@ -135,6 +148,8 @@ struct thread
    struct lock *wait_on_lock;   /* What lock is this thread waiting for? */
    struct list donate_list;     /* Threads to be donated by this thread */
    struct list_elem donate_elem;
+   int nice;
+   fixed_t recent_cpu;
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
@@ -197,5 +212,10 @@ void donate_priority(void);
 void remove_with_lock(struct lock *lock);
 void refresh_priority(void);
 void thread_test_preemption(void);
+
+/* Priority-aging. */
+void update_thread_priority(struct thread *t);
+void update_recent_cpu(void);
+void update_load_avg(void);
 
 #endif /* threads/thread.h */

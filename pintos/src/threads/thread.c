@@ -64,7 +64,7 @@ bool thread_prior_aging;
 /* [PROJECT-3] Comparison function for priority-descending Sort. */
 bool priority_compare(const struct list_elem *a,
                       const struct list_elem *b,
-                      void *aux)
+                      void *aux UNUSED)
 {
   struct thread *a_t = list_entry(a, struct thread, elem);
   struct thread *b_t = list_entry(b, struct thread, elem);
@@ -152,7 +152,6 @@ void thread_tick(void)
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return();
 
-/* [PROJECT-3] Jiho Rhee */
 #ifndef USERPROG
   if (thread_prior_aging == true)
     thread_aging();
@@ -224,6 +223,8 @@ tid_t thread_create(const char *name, int priority,
    * If new thread has higher priority than current(running) thread,
    * then reschedule threads by their priority.
    */
+  t->nice = NICE_DEFAULT;
+  t->recent_cpu = RECENT_CPU_DEFAULT;
   if (priority > thread_get_priority())
     thread_yield();
 
@@ -376,28 +377,28 @@ int thread_get_priority(void)
 /* Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED)
 {
-  /* Not yet implemented. */
+  struct thread *cur = thread_current();
+  cur->nice = nice;
+  update_thread_priority(cur);
+  thread_test_preemption();
 }
 
 /* Returns the current thread's nice value. */
 int thread_get_nice(void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int thread_get_load_avg(void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return fixed_to_int(f_mul_i(load_avg, 100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return fixed_to_int(f_mul_i(thread_current()->recent_cpu, 100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -500,6 +501,11 @@ init_thread(struct thread *t, const char *name, int priority)
   t->terminated = false;
   t->loaded = false;
   t->parent = running_thread();
+
+  /* [PROJECT-3] Jiho Rhee */
+  if (t->parent) /* If parent exists, nice value will be inherited. */
+    t->nice = t->parent->nice;
+
   sema_init(&t->child_wait, 0);
   sema_init(&t->child_exit, 0);
   sema_init(&t->child_load, 0);
@@ -512,6 +518,7 @@ init_thread(struct thread *t, const char *name, int priority)
   }
 
   /* [PROJECT-3] Jiho Rhee */
+  load_avg = 0;
   t->init_priority = priority;
   t->wait_on_lock = NULL;
   list_init(&t->donate_list);
@@ -631,18 +638,12 @@ allocate_tid(void)
 uint32_t thread_stack_ofs = offsetof(struct thread, stack);
 
 /**
- * [PROJECT-3] Jiho Rhee
+ *  [NOT-FOR-THIS-PROJECT] Jiho Rhee
  */
-void thread_aging(void)
-{
-  // TODO
-  return;
-}
-
 /* Priority donation. */
 void donate_priority(void)
 {
-  /* Nested donation */
+  /* Nested donation. The maximum depth is 8. */
   struct thread *cur = thread_current();
 
   for (int depth = 0; depth < 8; depth++)
@@ -656,6 +657,7 @@ void donate_priority(void)
   }
 }
 
+/* LOCK is now released. The donation(s) for LOCK will be finished. */
 void remove_with_lock(struct lock *lock)
 {
   struct thread *cur = thread_current();
@@ -668,54 +670,91 @@ void remove_with_lock(struct lock *lock)
   }
 }
 
-// void refresh_priority(void)
-// {
-//   struct thread *cur = thread_current();
-//   cur->priority = cur->init_priority;
-
-//   if (!list_empty(&cur->donate_list))
-//   {
-//     list_sort(&cur->donate_list, priority_compare, NULL);
-//     struct thread *t_highest_pri = list_entry(list_front(&cur->donate_list), struct thread, donate_elem);
-//     if (cur->priority < t_highest_pri->priority)
-//       cur->priority = t_highest_pri->priority;
-//   }
-// }
-
+/* If running thread is donated by some threads, then refresh priority. */
 void refresh_priority(void)
 {
   struct thread *cur = thread_current();
+  cur->priority = cur->init_priority;
 
-  cur->priority = cur->init_priority; // init_priority 로 설정 (현재 donate 된 Priority 에서 원래의 priority로 돌려준다)
-
-  // (그런데 nest donate 라서 돌아갈 priority가 여러개라면)
   if (!list_empty(&cur->donate_list))
-  { // donate_list 리스트에 스레드가 남아있다면 남아있는 스레드 중에서 가장 높은 priority 를 가져와야 한다
-    // priority 가 가장 높은 스레드를 고르기 위해 list_sort 를 사용하여 donate_list 리스트의 원소들을 priority 순으로 내림차순 정렬한다
-    list_sort(&cur->donate_list, priority_compare, 0);
-
-    // 맨 앞의 스레드(priority 가 가장 큰 스레드)를 뽑아서 init_priority 와 비교하여 둘 중 더 큰 priority 를 적용한다
-    struct thread *front = list_entry(list_front(&cur->donate_list), struct thread, donate_elem);
-    if (front->priority > cur->priority)
-      cur->priority = front->priority;
+  {
+    list_sort(&cur->donate_list, priority_compare, NULL);
+    struct thread *t_highest_pri = list_entry(list_front(&cur->donate_list), struct thread, donate_elem);
+    if (cur->priority < t_highest_pri->priority)
+      cur->priority = t_highest_pri->priority;
   }
 }
 
-// void thread_test_preemption(void)
-// {
-//   struct thread *cur = thread_current();
-//   if (!list_empty(&ready_list))
-//   {
-//     struct thread *t_ready_front = list_entry(list_front(&ready_list), struct thread, elem);
-//     if (cur->priority < t_ready_front->priority)
-//       thread_yield();
-//     }
-// }
-
+/* Should running thread yield to another thread? */
 void thread_test_preemption(void)
 {
-  if (!list_empty(&ready_list) &&
-      thread_current()->priority <
-          list_entry(list_front(&ready_list), struct thread, elem)->priority)
-    thread_yield();
+  struct thread *cur = thread_current();
+  if (!list_empty(&ready_list))
+  {
+    struct thread *t_ready_front = list_entry(list_front(&ready_list), struct thread, elem);
+    if (cur->priority < t_ready_front->priority)
+      thread_yield();
+  }
+}
+
+/**
+ * [PROJECT-3] Jiho Rhee
+ */
+void thread_aging(void)
+{
+  // printf("thread is aging...\n");
+  /* For every 4 ticks(TIME_SLICE), recalculate priority of all the threads in the system. */
+  if (thread_ticks % TIME_SLICE == 0)
+  {
+    for (struct list_elem *e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
+    {
+      struct thread *t = list_entry(e, struct thread, allelem);
+      update_thread_priority(t);
+    }
+  }
+}
+
+/* Priority-aging. */
+void update_thread_priority(struct thread *t)
+{
+  /* new_priority = PRI_MAX - (recent_cpu / 4) - (2 * nice) */
+  int new_priority = PRI_MAX;
+  new_priority -= fixed_to_int(f_div_i(t->recent_cpu, 4));
+  new_priority -= 2 * t->nice;
+
+  if (new_priority > PRI_MAX)
+    new_priority = PRI_MAX;
+  if (new_priority < PRI_MIN)
+    new_priority = PRI_MIN;
+
+  t->priority = new_priority;
+}
+
+/* Update recent_cpu of all the threads. */
+void update_recent_cpu(void)
+{
+  for (struct list_elem *e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
+  {
+    struct thread *t = list_entry(e, struct thread, allelem);
+
+    /* recent_cpu = (2 * load_avg) / (2 * load_avg + 1 ) * recent_cpu + nice */
+    fixed_t recent_cpu = t->recent_cpu;
+    fixed_t coeff = f_div(f_mul_i(load_avg, 2), f_add_i(f_mul(load_avg, 2), 1));
+    recent_cpu = f_mul(coeff, recent_cpu);
+    recent_cpu = f_add_i(recent_cpu, t->nice);
+
+    t->recent_cpu = recent_cpu;
+  }
+}
+
+/* Update load_avg every 1 sec(TIMER_FREQ in threads/timer.c). */
+void update_load_avg(void)
+{
+  /* load_avg = (59/60)*load_avg + (1/60)*ready_threads */
+  int ready_threads = list_size(&ready_list);
+  if (thread_current() != idle_thread)
+    ready_threads++;
+
+  load_avg = f_div_i(f_mul_i(load_avg, 59), 60);
+  load_avg += f_div_i(int_to_fixed(ready_threads), 60);
 }
