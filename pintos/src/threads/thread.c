@@ -117,6 +117,10 @@ void thread_init(void)
   init_thread(initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid();
+
+  /* [PROJECT-3] Jiho Rhee */
+  initial_thread->nice = NICE_DEFAULT;
+  initial_thread->recent_cpu = RECENT_CPU_DEFAULT;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -509,11 +513,13 @@ init_thread(struct thread *t, const char *name, int priority)
   t->parent = running_thread();
 
   /* [PROJECT-3] Jiho Rhee */
-  if (t->parent) /* If parent exists, NICE and RECENT_CPU will be inherited. */
-  {
-    t->nice = t->parent->nice;
-    t->recent_cpu = t->parent->recent_cpu;
-  }
+  // if (t->parent) /* If parent exists, NICE and RECENT_CPU will be inherited. */
+  // {
+  //   t->nice = t->parent->nice;
+  //   t->recent_cpu = t->parent->recent_cpu;
+  // }
+  t->nice = running_thread()->nice;
+  t->recent_cpu = running_thread()->recent_cpu;
 
   sema_init(&t->child_wait, 0);
   sema_init(&t->child_exit, 0);
@@ -725,7 +731,6 @@ void thread_test_preemption_on_intr(void)
  */
 void thread_aging(void)
 {
-  // printf("thread is aging...\n");
   /* For every 4 ticks(TIME_SLICE), recalculate priority of all the threads in the system. */
   enum intr_level old_level = intr_disable();
   if (thread_ticks % TIME_SLICE == 0)
