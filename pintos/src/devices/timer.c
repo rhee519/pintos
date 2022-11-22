@@ -192,12 +192,18 @@ timer_interrupt(struct intr_frame *args UNUSED)
     }
   }
 
+  /* recent_cpu of running thread increases by 1 every tick. */
+  thread_current()->recent_cpu += int_to_fixed(1);
+
   /* Update load_avg and recent_cpu(of all threads) every 1 sec(TIMER_FREQ). */
-  if (ticks % TIMER_FREQ == 0)
+  if (timer_ticks() % TIMER_FREQ == 0)
   {
     update_load_avg();
     update_recent_cpu();
   }
+
+  if (thread_mlfqs)
+    thread_aging();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

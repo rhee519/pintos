@@ -22,16 +22,9 @@ typedef int64_t fixed_t; /* 4-bytes fixed-point number. */
 #define F_INT 1 << B_INT     /* LSB of integer part of fixed-point. */
 #define F_ROUND 1 << B_ROUND /* MSB of fraction part of fixed-point (for integer-rounding).*/
 
-/* Arithmetic operations for FIXED_T. */
 fixed_t int_to_fixed(int i);
 int fixed_to_int(fixed_t f);
-fixed_t f_add(fixed_t f1, fixed_t f2);
-fixed_t f_sub(fixed_t f1, fixed_t f2);
 fixed_t f_mul(fixed_t f1, fixed_t f2);
 fixed_t f_div(fixed_t f1, fixed_t f2);
-
-fixed_t f_add_i(fixed_t f, int i);
-fixed_t f_mul_i(fixed_t f, int i);
-fixed_t f_div_i(fixed_t f, int i);
 
 #endif
