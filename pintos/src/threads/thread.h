@@ -140,13 +140,16 @@ struct thread
 
    /**
     * [PROJECT-3] Jiho Rhee
+    * 1. Alarm Clock
+    * 2. Priority Aging
+    * 3. BSD Scheduler (MLFQS)
     */
+
+   /* 1. Alarm Clock */
    int64_t wakeup_time;
    struct list_elem sleep_elem; /* Check if this thread is sleeping. */
-   int init_priority;           /* After priority-donation finished, priority must be reset to initial priority. */
-   struct lock *wait_on_lock;   /* What lock is this thread waiting for? */
-   struct list donate_list;     /* Threads to be donated by this thread */
-   struct list_elem donate_elem;
+
+   /* 2. Priority Aging, 3. BSD Scheduler (MLFQS) */
    int nice;
    fixed_t recent_cpu;
 
@@ -206,14 +209,8 @@ bool priority_compare(const struct list_elem *a,
                       const struct list_elem *b,
                       void *aux);
 
-/* Priority donation. */
-void donate_priority(void);
-void remove_with_lock(struct lock *lock);
-void refresh_priority(void);
-void thread_test_preemption(void);
-void thread_test_preemption_on_intr(void);
-
 /* Priority-aging. */
+int highest_priority(void);
 void update_thread_priority(struct thread *t);
 void update_recent_cpu(void);
 void update_load_avg(void);

@@ -370,12 +370,13 @@ void thread_foreach(thread_action_func *func, void *aux)
 void thread_set_priority(int new_priority)
 {
   /* [PROJECT-3] */
-  if (thread_mlfqs)
-    return;
+  struct thread *cur = thread_current();
+  int old_priority = cur->priority;
+  cur->priority = new_priority;
 
-  thread_current()->init_priority = new_priority;
-  refresh_priority();
-  thread_test_preemption();
+  /* If Priority decreases, then current thread may yield. */
+  if (new_priority < old_priority)
+    thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -390,7 +391,6 @@ void thread_set_nice(int nice UNUSED)
   struct thread *cur = thread_current();
   cur->nice = nice;
   update_thread_priority(cur);
-  thread_test_preemption();
 }
 
 /* Returns the current thread's nice value. */
@@ -513,13 +513,8 @@ init_thread(struct thread *t, const char *name, int priority)
   t->parent = running_thread();
 
   /* [PROJECT-3] Jiho Rhee */
-  // if (t->parent) /* If parent exists, NICE and RECENT_CPU will be inherited. */
-  // {
-  //   t->nice = t->parent->nice;
-  //   t->recent_cpu = t->parent->recent_cpu;
-  // }
-  t->nice = running_thread()->nice;
-  t->recent_cpu = running_thread()->recent_cpu;
+  t->nice = t->parent->nice;
+  t->recent_cpu = t->parent->recent_cpu;
 
   sema_init(&t->child_wait, 0);
   sema_init(&t->child_exit, 0);
@@ -534,9 +529,6 @@ init_thread(struct thread *t, const char *name, int priority)
 
   /* [PROJECT-3] Jiho Rhee */
   load_avg = 0;
-  t->init_priority = priority;
-  t->wait_on_lock = NULL;
-  list_init(&t->donate_list);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -653,80 +645,6 @@ allocate_tid(void)
 uint32_t thread_stack_ofs = offsetof(struct thread, stack);
 
 /**
- *  [NOT-FOR-THIS-PROJECT] Jiho Rhee
- */
-/* Priority donation. */
-void donate_priority(void)
-{
-  /* Nested donation. The maximum depth is 8. */
-  struct thread *cur = thread_current();
-
-  for (int depth = 0; depth < 8; depth++)
-  {
-    if (!cur->wait_on_lock)
-      break;
-    struct thread *holder = cur->wait_on_lock->holder;
-    ASSERT(holder);
-    holder->priority = cur->priority;
-    cur = holder;
-  }
-}
-
-/* LOCK is now released. The donation(s) for LOCK will be finished. */
-void remove_with_lock(struct lock *lock)
-{
-  struct thread *cur = thread_current();
-
-  for (struct list_elem *e = list_begin(&cur->donate_list); e != list_end(&cur->donate_list); e = list_next(e))
-  {
-    struct thread *old_holder = list_entry(e, struct thread, donate_elem);
-    if (old_holder->wait_on_lock == lock)
-      list_remove(e);
-  }
-}
-
-/* If running thread is donated by some threads, then refresh priority. */
-void refresh_priority(void)
-{
-  struct thread *cur = thread_current();
-  cur->priority = cur->init_priority;
-
-  if (!list_empty(&cur->donate_list))
-  {
-    list_sort(&cur->donate_list, priority_compare, NULL);
-    struct thread *t_highest_pri = list_entry(list_front(&cur->donate_list), struct thread, donate_elem);
-    if (cur->priority < t_highest_pri->priority)
-      cur->priority = t_highest_pri->priority;
-  }
-}
-
-/* Should running thread yield to another thread? */
-void thread_test_preemption(void)
-{
-  struct thread *cur = thread_current();
-  if (!list_empty(&ready_list))
-  {
-    struct thread *t_ready_front = list_entry(list_front(&ready_list), struct thread, elem);
-    if (cur->priority < t_ready_front->priority)
-      thread_yield();
-  }
-}
-
-/*  Should running thread yield to another thread?
-    If does, then yield after interrupt overs.
-*/
-void thread_test_preemption_on_intr(void)
-{
-  struct thread *cur = thread_current();
-  if (!list_empty(&ready_list))
-  {
-    struct thread *t_ready_front = list_entry(list_front(&ready_list), struct thread, elem);
-    if (cur->priority < t_ready_front->priority)
-      intr_yield_on_return();
-  }
-}
-
-/**
  * [PROJECT-3] Jiho Rhee
  */
 void thread_aging(void)
@@ -744,6 +662,20 @@ void thread_aging(void)
   intr_set_level(old_level);
 }
 
+/* Return the highest priority of READY_LIST. */
+int highest_priority(void)
+{
+  int hp = -1;
+  for (struct list_elem *e = list_begin(&ready_list); e != list_end(&ready_list); e = list_next(e))
+  {
+    struct thread *t = list_entry(e, struct thread, elem);
+    if (hp < t->priority)
+      hp = t->priority;
+  }
+
+  return hp;
+}
+
 /* Priority-aging. */
 void update_thread_priority(struct thread *t)
 {
@@ -756,7 +688,6 @@ void update_thread_priority(struct thread *t)
     new_priority = PRI_MIN;
 
   t->priority = new_priority;
-  // thread_test_preemption_on_intr();
 }
 
 /* Update recent_cpu of all the threads. */
