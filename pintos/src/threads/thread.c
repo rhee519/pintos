@@ -156,7 +156,7 @@ void thread_tick(void)
     intr_yield_on_return();
 
 #ifndef USERPROG
-  if (thread_prior_aging || thread_mlfqs)
+  if (thread_prior_aging)
     thread_aging();
 #endif
 }
@@ -727,6 +727,7 @@ void thread_aging(void)
 {
   // printf("thread is aging...\n");
   /* For every 4 ticks(TIME_SLICE), recalculate priority of all the threads in the system. */
+  enum intr_level old_level = intr_disable();
   if (thread_ticks % TIME_SLICE == 0)
   {
     for (struct list_elem *e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
@@ -735,15 +736,14 @@ void thread_aging(void)
       update_thread_priority(t);
     }
   }
+  intr_set_level(old_level);
 }
 
 /* Priority-aging. */
 void update_thread_priority(struct thread *t)
 {
   /* new_priority = PRI_MAX - (recent_cpu / 4) - (2 * nice) */
-  int new_priority = PRI_MAX;
-  new_priority -= fixed_to_int(t->recent_cpu / 4);
-  new_priority -= 2 * t->nice;
+  int new_priority = PRI_MAX - fixed_to_int(t->recent_cpu / 4) - 2 * t->nice;
 
   if (new_priority > PRI_MAX)
     new_priority = PRI_MAX;
@@ -763,14 +763,10 @@ void update_recent_cpu(void)
 
     /* recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice */
     fixed_t recent_cpu = t->recent_cpu;
-    // fixed_t coeff = f_div(f_mul_i(load_avg, 2), f_add_i(f_mul(load_avg, 2), 1));
     fixed_t coeff = f_div((2 * load_avg), (2 * load_avg + int_to_fixed(1)));
-    // printf("\tcoeff: %d\n", (int)coeff);
-    recent_cpu = f_mul(coeff, recent_cpu);
-    recent_cpu += int_to_fixed(t->nice);
+    recent_cpu = f_mul(coeff, recent_cpu) + int_to_fixed(t->nice);
 
     t->recent_cpu = recent_cpu;
-    // printf("recent_cpu: %d\n", (int)recent_cpu);
   }
 }
 
@@ -782,11 +778,5 @@ void update_load_avg(void)
   if (thread_current() != idle_thread)
     ready_threads++;
 
-  // printf("1/60 = %d in fixed-point\n", (int)f_div_i(1 << B_INT, 60));
-  load_avg = load_avg * 59 / 60;
-  // printf("\t59/60 * load_avg = %d\n", fixed_to_int(load_avg));
-  load_avg += int_to_fixed(1) * ready_threads / 60;
-  // printf("\t59/60 * load_avg + 1/60 * ready_threads = %d\n", (int)load_avg);
-  // printf("\tready_threads: %d\n", ready_threads);
-  // printf("\tload_avg: %d\n", (int)load_avg);
+  load_avg = load_avg * 59 / 60 + int_to_fixed(ready_threads) / 60;
 }
