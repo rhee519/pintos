@@ -95,16 +95,16 @@ void timer_sleep(int64_t ticks)
   int64_t start = timer_ticks();
 
   ASSERT(intr_get_level() == INTR_ON);
-
   /* Busy-waiting (inefficient way) */
   // while (timer_elapsed(start) < ticks)
   //   thread_yield();
 
   /* [PROJECT-3] Block thread & set wake-up time. */
+  enum intr_level old_level = intr_disable();
+
   struct thread *cur = thread_current();
   cur->wakeup_time = start + ticks;
   list_push_back(&sleep_list, &cur->sleep_elem);
-  enum intr_level old_level = intr_disable();
   thread_block();
   intr_set_level(old_level);
 }
