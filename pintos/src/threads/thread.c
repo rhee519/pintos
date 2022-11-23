@@ -121,6 +121,7 @@ void thread_init(void)
   /* [PROJECT-3] Jiho Rhee */
   initial_thread->nice = NICE_DEFAULT;
   initial_thread->recent_cpu = RECENT_CPU_DEFAULT;
+  load_avg = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -528,7 +529,7 @@ init_thread(struct thread *t, const char *name, int priority)
   }
 
   /* [PROJECT-3] Jiho Rhee */
-  load_avg = 0;
+  // load_avg = 0;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -690,7 +691,7 @@ void update_thread_priority(struct thread *t)
   t->priority = new_priority;
 }
 
-/* Update recent_cpu of all the threads. */
+/* Update recent_cpu of all the threads every 1 sec(TIMER_FREQ in threads/timer.c). */
 void update_recent_cpu(void)
 {
   for (struct list_elem *e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
